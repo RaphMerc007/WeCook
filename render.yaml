@@ -16,3 +16,5 @@ services:
           property: connectionString
       - key: PORT
         value: 3001
+      - key: CORS_ORIGIN
+        value: https://wecook.onrender.com
