@@ -2,6 +2,10 @@
 	"name": "wecook",
 	"version": "1.0.0",
 	"private": true,
+	"workspaces": [
+		"web-app",
+		"backend"
+	],
 	"scripts": {
 		"build": "cd web-app && yarn build && cd ../backend && yarn build",
 		"start": "cd backend && NODE_ENV=production yarn start",

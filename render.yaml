@@ -3,6 +3,7 @@ services:
     name: wecook-backend
     env: node
     buildCommand: |
+      yarn install
       cd web-app && yarn install && yarn build
       cd ../backend && yarn install && yarn build
     startCommand: cd backend && yarn start
