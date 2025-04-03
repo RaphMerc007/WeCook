@@ -1,0 +1,36 @@
+{
+	"manifest_version": 3,
+	"name": "WeCook Meal Extractor",
+	"version": "1.0",
+	"description": "Extract meal information from WeCook",
+	"permissions": ["activeTab", "scripting", "storage", "tabs"],
+	"action": {
+		"default_popup": "src/popup.html",
+		"default_icon": {
+			"16": "src/icons/icon16.png",
+			"48": "src/icons/icon48.png",
+			"128": "src/icons/icon128.png"
+		}
+	},
+	"icons": {
+		"16": "src/icons/icon16.png",
+		"48": "src/icons/icon48.png",
+		"128": "src/icons/icon128.png"
+	},
+	"content_scripts": [
+		{
+			"matches": ["https://www.wecookmeals.ca/*"],
+			"js": ["src/content.js"]
+		}
+	],
+	"web_accessible_resources": [
+		{
+			"resources": ["src/webapp-bridge.js"],
+			"matches": ["http://localhost:3000/*"]
+		}
+	],
+	"host_permissions": [
+		"https://www.wecookmeals.ca/*",
+		"http://localhost:3000/*"
+	]
+}

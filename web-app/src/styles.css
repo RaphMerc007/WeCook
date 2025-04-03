@@ -1,0 +1,315 @@
+:root {
+	--primary-color: #2563eb;
+	--secondary-color: #1e40af;
+	--background-color: #f3f4f6;
+	--text-color: #1f2937;
+	--border-color: #e5e7eb;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+		Ubuntu, Cantarell, sans-serif;
+	line-height: 1.5;
+	color: var(--text-color);
+	background-color: var(--background-color);
+}
+
+#app {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+#main-nav {
+	background-color: white;
+	border-bottom: 1px solid var(--border-color);
+	padding: 1rem;
+}
+
+.nav-content {
+	max-width: 1200px;
+	margin: 0 auto;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.nav-brand {
+	font-size: 1.5rem;
+	font-weight: bold;
+	color: var(--primary-color);
+	text-decoration: none;
+}
+
+.nav-links {
+	margin-left: 100px;
+	display: flex;
+	gap: 1rem;
+	width: 100%;
+	align-items: flex-start;
+}
+
+.nav-link {
+	color: var(--text-color);
+	text-decoration: none;
+	padding: 0.5rem 1rem;
+	border-radius: 0.375rem;
+	transition: background-color 0.2s;
+}
+
+.nav-link:hover {
+	background-color: var(--background-color);
+}
+
+#main-content {
+	flex: 1;
+	padding: 2rem;
+	max-width: 1200px;
+	margin: 0 auto;
+	width: 100%;
+}
+
+/* Common components */
+.button {
+	background-color: var(--primary-color);
+	color: white;
+	padding: 0.5rem 1rem;
+	border: none;
+	border-radius: 0.375rem;
+	cursor: pointer;
+	font-size: 1rem;
+	transition: background-color 0.2s;
+}
+
+.button:hover {
+	background-color: var(--secondary-color);
+}
+
+.card {
+	background-color: white;
+	border-radius: 0.5rem;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	padding: 1.5rem;
+	margin-bottom: 1rem;
+}
+
+.input {
+	width: 100%;
+	padding: 0.5rem;
+	border: 1px solid var(--border-color);
+	border-radius: 0.375rem;
+	font-size: 1rem;
+}
+
+.input:focus {
+	outline: none;
+	border-color: var(--primary-color);
+	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* Layout components */
+.container {
+	max-width: 800px;
+	margin: 0 auto;
+	padding: 2rem;
+}
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.group {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1.5rem;
+}
+
+.group > * {
+	flex: 1;
+}
+
+.group > *:first-child {
+	flex: 0 0 auto;
+}
+
+.grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 1rem;
+}
+
+/* Typography */
+h2 {
+	font-size: 1.5rem;
+	font-weight: 600;
+	margin: 0;
+}
+
+h3 {
+	font-size: 1.25rem;
+	font-weight: 600;
+	margin: 0 0 1rem 0;
+}
+
+/* Button states */
+button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+	.grid {
+		grid-template-columns: 1fr;
+	}
+
+	.group {
+		flex-direction: column;
+		align-items: stretch;
+	}
+}
+
+/* Modal styles */
+.modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+}
+
+.modal {
+	background-color: white;
+	padding: 2rem;
+	border-radius: 0.5rem;
+	max-width: 500px;
+	width: 90%;
+	max-height: 90vh;
+	overflow-y: auto;
+}
+
+/* Form styles */
+label {
+	display: block;
+	margin-bottom: 0.5rem;
+	font-weight: 500;
+}
+
+.error-message {
+	color: #dc2626;
+	font-size: 0.875rem;
+	margin-top: 0.25rem;
+}
+
+.text-muted {
+	color: #6b7280;
+	font-size: 0.875rem;
+}
+
+.button-danger {
+	background-color: #dc2626;
+}
+
+.button-danger:hover {
+	background-color: #b91c1c;
+}
+
+/* Badge styles */
+.badge {
+	display: inline-block;
+	background-color: var(--primary-color);
+	color: white;
+	padding: 0.25rem 0.75rem;
+	border-radius: 9999px;
+	font-size: 0.875rem;
+	align-self: flex-start;
+}
+
+/* Select styles */
+select.input {
+	appearance: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 0.5rem center;
+	background-size: 1.5rem;
+	padding-right: 2.5rem;
+}
+
+/* File input styles */
+input[type="file"].input {
+	padding: 0.5rem;
+	border: 1px dashed var(--border-color);
+	background-color: var(--background-color);
+	cursor: pointer;
+}
+
+input[type="file"].input:hover {
+	border-color: var(--primary-color);
+	background-color: rgba(37, 99, 235, 0.05);
+}
+
+/* Meal card styles */
+.meal-image {
+	width: 120px;
+	height: 120px;
+	object-fit: cover;
+	border-radius: 0.5rem;
+	flex-shrink: 0;
+}
+
+.meal-details {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.text-center {
+	text-align: center;
+}
+
+.quantity-control {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+}
+
+.quantity-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 0.5rem;
+	background-color: var(--primary-color);
+	color: white;
+	font-size: 1.5rem;
+	cursor: pointer;
+	border: none;
+	transition: background-color 0.2s;
+}
+
+.quantity-button:hover {
+	background-color: var(--secondary-color);
+}
+
+.quantity-display {
+	font-size: 1.25rem;
+	min-width: 2rem;
+	text-align: center;
+}

@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: wecook-backend
+    env: node
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        fromDatabase:
+          name: wecook-db
+          property: connectionString
+      - key: PORT
+        value: 3001
