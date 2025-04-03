@@ -2,8 +2,10 @@ services:
   - type: web
     name: wecook-backend
     env: node
-    buildCommand: cd backend && npm install && npm run build
-    startCommand: cd backend && npm start
+    buildCommand: |
+      cd web-app && yarn install && yarn build
+      cd ../backend && yarn install && yarn build
+    startCommand: cd backend && yarn start
     envVars:
       - key: NODE_ENV
         value: production
