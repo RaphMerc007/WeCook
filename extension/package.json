@@ -1,0 +1,13 @@
+{
+	"name": "wecook-extension",
+	"version": "1.0.0",
+	"description": "WeCook Chrome Extension",
+	"scripts": {
+		"build": "tsc && vite build",
+		"watch": "tsc -w"
+	},
+	"devDependencies": {
+		"typescript": "^5.2.2",
+		"vite": "^5.1.0"
+	}
+}

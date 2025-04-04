@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>WeCook Extension</title>
+		<style>
+			body {
+				width: 400px;
+				padding: 10px;
+			}
+			.meal-list {
+				max-height: 300px;
+				overflow-y: auto;
+			}
+			.meal-item {
+				margin: 5px 0;
+				padding: 5px;
+				border: 1px solid #ccc;
+			}
+			.status {
+				margin: 10px 0;
+				padding: 5px;
+				border-radius: 4px;
+			}
+			.success {
+				background-color: #dff0d8;
+				color: #3c763d;
+			}
+			.error {
+				background-color: #f2dede;
+				color: #a94442;
+			}
+		</style>
+	</head>
+	<body>
+		<h2>WeCook Extension</h2>
+		<button id="extractButton">Extract Meals</button>
+		<div id="status" class="status"></div>
+		<div class="meal-list" id="mealList"></div>
+		<button id="importButton">Import to WeCook</button>
+		<script type="module" src="dist/popup.js"></script>
+	</body>
+</html>
