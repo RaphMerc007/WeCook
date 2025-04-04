@@ -82,15 +82,19 @@ app.use("/uploads", express.static("uploads"));
 
 // Logging middleware
 app.use((req, res, next) => {
-	console.log(`${req.method} ${req.url}`);
+	console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+	console.log("Request headers:", req.headers);
 	next();
 });
 
 // MongoDB connection with retry logic
 const connectWithRetry = async () => {
 	try {
+		console.log("Attempting to connect to MongoDB...");
+		console.log("MongoDB URI:", mongoUri);
 		await mongoose.connect(mongoUri);
-		console.log("Connected to MongoDB");
+		console.log("Connected to MongoDB successfully");
+		console.log("MongoDB connection state:", mongoose.connection.readyState);
 
 		// Start the server only after successful MongoDB connection
 		app.listen(port, () => {
