@@ -11,19 +11,43 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3001;
-const mongoUri =
-	process.env.NODE_ENV === "production"
-		? process.env.MONGODB_URI || "mongodb+srv://your-production-mongodb-uri"
-		: "mongodb://localhost:27017/wecook";
+
+// MongoDB connection string
+const mongoUri = process.env.MONGODB_URI;
+if (!mongoUri) {
+	console.error("MONGODB_URI environment variable is not set");
+	process.exit(1);
+}
 
 // Configure CORS
 app.use(
 	cors({
-		origin:
-			process.env.NODE_ENV === "production"
-				? "https://wecook.onrender.com"
-				: "http://localhost:5173",
+		origin: (origin, callback) => {
+			const allowedOrigins = [
+				"https://wecook.onrender.com",
+				"http://localhost:5173",
+				"chrome-extension://*",
+			];
+
+			if (
+				!origin ||
+				allowedOrigins.some((allowed) => {
+					if (allowed.includes("*")) {
+						// For wildcard patterns like chrome-extension://*
+						return origin.startsWith(allowed.split("*")[0]);
+					}
+					return allowed === origin;
+				})
+			) {
+				callback(null, true);
+			} else {
+				console.log("CORS blocked origin:", origin);
+				callback(new Error("Not allowed by CORS"));
+			}
+		},
 		credentials: true,
+		methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+		allowedHeaders: ["Content-Type", "Authorization"],
 	})
 );
 
@@ -72,6 +96,11 @@ mongoose
 	.connect(mongoUri)
 	.then(() => console.log("Connected to MongoDB"))
 	.catch((err) => console.error("MongoDB connection error:", err));
+
+// Root route for health check
+app.get("/", (req, res) => {
+	res.json({ status: "ok", message: "WeCook backend is running" });
+});
 
 // Routes
 app.get("/api/selections", async (req, res) => {
@@ -262,11 +291,18 @@ app.get("/api/meals", async (req, res) => {
 // Import meals
 app.post("/api/meals", async (req, res) => {
 	try {
-		console.log("Importing meals:", req.body);
+		console.log("Import meals request received");
+		console.log("Request body:", req.body);
 		const { meals, date } = req.body;
 
 		if (!Array.isArray(meals)) {
+			console.log("Invalid meals data:", meals);
 			return res.status(400).json({ error: "Meals must be an array" });
+		}
+
+		console.log(`Importing ${meals.length} meals`);
+		if (date) {
+			console.log("With date:", date);
 		}
 
 		// Save meals to database
@@ -292,6 +328,7 @@ app.post("/api/meals", async (req, res) => {
 
 		// If a date is provided, update the selections
 		if (date) {
+			console.log("Updating selections with date:", date);
 			const selectionsDoc = await SelectionsModel.findOne();
 			const weekNumber = selectionsDoc
 				? selectionsDoc.selections.length + 1
@@ -318,8 +355,10 @@ app.post("/api/meals", async (req, res) => {
 				},
 				{ upsert: true }
 			);
+			console.log("Selections updated successfully");
 		}
 
+		console.log("Import completed successfully");
 		res.json({
 			message: "Meals imported successfully",
 			mealsCount: savedMeals.length,
