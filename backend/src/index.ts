@@ -115,7 +115,8 @@ app.get("/", (req, res) => {
 // Routes
 app.get("/api/selections", async (req, res) => {
 	try {
-		console.log("Fetching selections...");
+		console.log("GET /api/selections - Fetching selections...");
+		console.log("MongoDB connection state:", mongoose.connection.readyState);
 		const selections = await SelectionsModel.findOne();
 		console.log("Found selections:", selections);
 
