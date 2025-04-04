@@ -170,30 +170,22 @@ document.addEventListener("DOMContentLoaded", function () {
 	importButton.addEventListener("click", async () => {
 		console.log("[Popup] Import button clicked");
 		try {
-			const response = await fetch(
-				process.env.NODE_ENV === "production"
-					? "https://wecook-backend.onrender.com/api/meals"
-					: "http://localhost:3001/api/meals",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						meals: extractedMeals,
-						date: extractedDate,
-					}),
-				}
-			);
+			const response = await chrome.runtime.sendMessage({
+				action: "importMeals",
+				data: {
+					meals: extractedMeals,
+					date: extractedDate,
+				},
+			});
 
-			if (response.ok) {
-				showStatus("Import successful!", "success");
+			if (response.success) {
+				showStatus("Meals imported successfully!", "success");
 			} else {
-				showStatus("Import failed.", "error");
+				showStatus(`Error importing meals: ${response.error}`, "error");
 			}
 		} catch (error) {
 			console.error("[Popup] Error importing meals:", error);
-			showStatus("Error: " + error.message, "error");
+			showStatus(`Error importing meals: ${error.message}`, "error");
 		}
 	});
 
