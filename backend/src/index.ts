@@ -81,9 +81,6 @@ const upload = multer({ storage: storage });
 // Middleware
 app.use(express.json());
 
-// Serve uploaded files
-app.use("/uploads", express.static("uploads"));
-
 // Logging middleware
 app.use((req, res, next) => {
 	console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -419,3 +416,14 @@ app.use(
 		res.status(500).json({ error: "Internal server error" });
 	}
 );
+
+// Serve uploaded files and static files after all API routes
+app.use("/uploads", express.static("uploads"));
+
+// Serve frontend in production
+if (process.env.NODE_ENV === "production") {
+	app.use(express.static(path.join(__dirname, "../../web-app/dist")));
+	app.get("*", (req, res) => {
+		res.sendFile(path.join(__dirname, "../../web-app/dist/index.html"));
+	});
+}
