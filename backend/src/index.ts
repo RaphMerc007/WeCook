@@ -16,6 +16,9 @@ const port = process.env.PORT || 3001;
 const mongoUri = process.env.MONGODB_URI;
 if (!mongoUri) {
 	console.error("MONGODB_URI environment variable is not set");
+	console.error(
+		"Please set the MONGODB_URI environment variable in your Render dashboard"
+	);
 	process.exit(1);
 }
 
@@ -91,11 +94,19 @@ app.use((req, res, next) => {
 	next();
 });
 
-// MongoDB connection
-mongoose
-	.connect(mongoUri)
-	.then(() => console.log("Connected to MongoDB"))
-	.catch((err) => console.error("MongoDB connection error:", err));
+// MongoDB connection with retry logic
+const connectWithRetry = async () => {
+	try {
+		await mongoose.connect(mongoUri);
+		console.log("Connected to MongoDB");
+	} catch (err) {
+		console.error("MongoDB connection error:", err);
+		console.log("Retrying connection in 5 seconds...");
+		setTimeout(connectWithRetry, 5000);
+	}
+};
+
+connectWithRetry();
 
 // Root route for health check
 app.get("/", (req, res) => {
@@ -395,6 +406,9 @@ app.use(
 	}
 );
 
+// Start the server
 app.listen(port, () => {
 	console.log(`Server running on port ${port}`);
+	console.log(`Health check available at http://localhost:${port}/`);
+	console.log(`API endpoints available at http://localhost:${port}/api/`);
 });

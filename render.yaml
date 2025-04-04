@@ -4,17 +4,27 @@ services:
     env: node
     buildCommand: |
       yarn install
-      cd web-app && yarn install && yarn build
-      cd ../backend && yarn install && yarn build
+      cd backend && yarn install && yarn build
     startCommand: cd backend && yarn start
     envVars:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        fromDatabase:
-          name: wecook-db
-          property: connectionString
+        value: mongodb+srv://RaphaelMercier:6qj!9Kvs@cluster0.khhrjpp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
       - key: PORT
         value: 3001
       - key: CORS_ORIGIN
-        value: https://wecook.onrender.com
+        value: https://wecook-backend.onrender.com
+
+  - type: web
+    name: wecook-frontend
+    env: node
+    buildCommand: |
+      yarn install
+      cd web-app && yarn install && yarn build
+    startCommand: cd web-app && yarn start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REACT_APP_API_URL
+        value: https://wecook-backend.onrender.com
