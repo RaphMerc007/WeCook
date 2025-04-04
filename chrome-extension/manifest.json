@@ -1,16 +1,11 @@
 {
 	"manifest_version": 3,
-	"name": "WeCook Meal Extractor",
+	"name": "WeCook Meal Importer",
 	"version": "1.0",
-	"description": "Extract meal information from WeCook",
-	"permissions": ["activeTab", "scripting", "storage", "tabs"],
+	"description": "Import meals from various websites to WeCook",
+	"permissions": ["activeTab", "scripting", "storage"],
 	"action": {
-		"default_popup": "src/popup.html",
-		"default_icon": {
-			"16": "src/icons/icon16.png",
-			"48": "src/icons/icon48.png",
-			"128": "src/icons/icon128.png"
-		}
+		"default_popup": "popup.html"
 	},
 	"icons": {
 		"16": "src/icons/icon16.png",
@@ -19,18 +14,21 @@
 	},
 	"content_scripts": [
 		{
-			"matches": ["https://www.wecookmeals.ca/*"],
-			"js": ["src/content.js"]
+			"matches": ["http://localhost:3000/*", "https://wecook.onrender.com/*"],
+			"js": ["content.js"]
 		}
 	],
 	"web_accessible_resources": [
 		{
 			"resources": ["src/webapp-bridge.js"],
-			"matches": ["http://localhost:3000/*"]
+			"matches": ["http://localhost:3000/*", "https://wecook.onrender.com/*"]
 		}
 	],
 	"host_permissions": [
-		"https://www.wecookmeals.ca/*",
-		"http://localhost:3000/*"
-	]
+		"http://localhost:3000/*",
+		"https://wecook.onrender.com/*"
+	],
+	"background": {
+		"service_worker": "background.js"
+	}
 }

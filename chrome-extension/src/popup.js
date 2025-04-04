@@ -170,16 +170,21 @@ document.addEventListener("DOMContentLoaded", function () {
 	importButton.addEventListener("click", async () => {
 		console.log("[Popup] Import button clicked");
 		try {
-			const response = await fetch("http://localhost:3001/api/meals", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					meals: extractedMeals,
-					date: extractedDate,
-				}),
-			});
+			const response = await fetch(
+				process.env.NODE_ENV === "production"
+					? "https://wecook-backend.onrender.com/api/meals"
+					: "http://localhost:3001/api/meals",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						meals: extractedMeals,
+						date: extractedDate,
+					}),
+				}
+			);
 
 			if (response.ok) {
 				showStatus("Import successful!", "success");
@@ -322,7 +327,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
 		try {
 			// Get the web app tab
-			const [tab] = await chrome.tabs.query({ url: "http://localhost:3000/*" });
+			const [tab] = await chrome.tabs.query({
+				url:
+					process.env.NODE_ENV === "production"
+						? "https://wecook.onrender.com/*"
+						: "http://localhost:3000/*",
+			});
 			if (!tab) {
 				console.error("[Popup] Web app tab not found");
 				throw new Error("Web app tab not found");

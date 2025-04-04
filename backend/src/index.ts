@@ -11,7 +11,10 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3001;
-const mongoUri = process.env.MONGODB_URI || "mongodb://localhost:27017/wecook";
+const mongoUri =
+	process.env.NODE_ENV === "production"
+		? process.env.MONGODB_URI || "mongodb+srv://your-production-mongodb-uri"
+		: "mongodb://localhost:27017/wecook";
 
 // Configure CORS
 app.use(
