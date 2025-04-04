@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: wecook-backend
+    name: wecook-api
     env: node
     buildCommand: |
       yarn install
@@ -25,4 +25,4 @@ services:
       - key: NODE_ENV
         value: production
       - key: REACT_APP_API_URL
-        value: https://wecook-backend.onrender.com
+        value: https://wecook-api.onrender.com

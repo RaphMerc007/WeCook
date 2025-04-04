@@ -31,7 +31,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 		console.log("[Background] Date:", date);
 
 		// Use production URL by default
-		const backendUrl = "https://wecook-backend.onrender.com";
+		const backendUrl = "https://wecook-api.onrender.com";
 
 		// Make the request directly to the meals endpoint
 		fetch(`${backendUrl}/api/meals`, {

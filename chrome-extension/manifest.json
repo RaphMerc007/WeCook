@@ -6,7 +6,7 @@
 	"permissions": ["activeTab", "scripting", "storage"],
 	"host_permissions": [
 		"http://localhost:3001/*",
-		"https://wecook-backend.onrender.com/*"
+		"https://wecook-api.onrender.com/*"
 	],
 	"action": {
 		"default_popup": "dist/popup.html"
