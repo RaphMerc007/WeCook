@@ -92,23 +92,22 @@ app.use((req, res, next) => {
 const connectWithRetry = async () => {
 	try {
 		console.log("Attempting to connect to MongoDB...");
-		console.log("MongoDB URI:", mongoUri);
 		await mongoose.connect(mongoUri);
 		console.log("Connected to MongoDB successfully");
 		console.log("MongoDB connection state:", mongoose.connection.readyState);
-
-		// Start the server only after successful MongoDB connection
-		app.listen(port, () => {
-			console.log(`Server running on port ${port}`);
-			console.log(`Health check available at http://localhost:${port}/`);
-			console.log(`API endpoints available at http://localhost:${port}/api/`);
-		});
 	} catch (err) {
 		console.error("MongoDB connection error:", err);
 		console.log("Retrying connection in 5 seconds...");
 		setTimeout(connectWithRetry, 5000);
 	}
 };
+
+// Start server immediately to handle health checks
+app.listen(port, () => {
+	console.log(`Server running on port ${port}`);
+	console.log(`Health check available at http://localhost:${port}/`);
+	console.log(`API endpoints available at http://localhost:${port}/api/`);
+});
 
 // Connect to MongoDB
 connectWithRetry();
