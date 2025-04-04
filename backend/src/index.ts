@@ -42,6 +42,7 @@ app.use(
 					return allowed === origin;
 				})
 			) {
+				console.log("CORS allowed origin:", origin);
 				callback(null, true);
 			} else {
 				console.log("CORS blocked origin:", origin);
@@ -50,7 +51,10 @@ app.use(
 		},
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-		allowedHeaders: ["Content-Type", "Authorization"],
+		allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept"],
+		exposedHeaders: ["Content-Range", "X-Content-Range"],
+		preflightContinue: false,
+		optionsSuccessStatus: 204,
 	})
 );
 
@@ -109,11 +113,17 @@ const connectWithRetry = async () => {
 	}
 };
 
+// Connect to MongoDB
 connectWithRetry();
 
 // Root route for health check
 app.get("/", (req, res) => {
-	res.json({ status: "ok", message: "WeCook backend is running" });
+	const isConnected = mongoose.connection.readyState === 1;
+	res.json({
+		status: "ok",
+		message: "WeCook backend is running",
+		mongodb: isConnected ? "connected" : "disconnected",
+	});
 });
 
 // Routes

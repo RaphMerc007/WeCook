@@ -10,7 +10,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        value: mongodb+srv://RaphaelMercier:6qj!9Kvs@cluster0.khhrjpp.mongodb.net/wecook?retryWrites=true&w=majority&appName=Cluster0
+        value: mongodb+srv://RaphaelMercier:6qj!9Kvs@cluster0.khhrjpp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
       - key: PORT
         value: 3001
       - key: CORS_ORIGIN
