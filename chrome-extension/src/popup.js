@@ -152,7 +152,14 @@ document.addEventListener("DOMContentLoaded", function () {
 			URL.revokeObjectURL(url);
 
 			// Open the web app import page
-			chrome.tabs.create({ url: "http://localhost:3000/import" }, (tab) => {
+			const [tab] = await chrome.tabs.query({
+				url:
+					process.env.NODE_ENV === "production"
+						? "https://wecook.onrender.com/*"
+						: "http://localhost:3000/*",
+			});
+
+			chrome.tabs.create({ url: tab.url + "/import" }, (tab) => {
 				console.log("[Popup] Web app import page opened");
 			});
 

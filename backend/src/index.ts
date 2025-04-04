@@ -80,14 +80,6 @@ app.use(express.json());
 // Serve uploaded files
 app.use("/uploads", express.static("uploads"));
 
-// Serve frontend in production
-if (process.env.NODE_ENV === "production") {
-	app.use(express.static(path.join(__dirname, "../../web-app/dist")));
-	app.get("*", (req, res) => {
-		res.sendFile(path.join(__dirname, "../../web-app/dist/index.html"));
-	});
-}
-
 // Logging middleware
 app.use((req, res, next) => {
 	console.log(`${req.method} ${req.url}`);
@@ -405,6 +397,14 @@ app.use(
 		res.status(500).json({ error: "Internal server error" });
 	}
 );
+
+// Serve frontend in production
+if (process.env.NODE_ENV === "production") {
+	app.use(express.static(path.join(__dirname, "../../web-app/dist")));
+	app.get("*", (req, res) => {
+		res.sendFile(path.join(__dirname, "../../web-app/dist/index.html"));
+	});
+}
 
 // Start the server
 app.listen(port, () => {
