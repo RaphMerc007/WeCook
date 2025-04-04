@@ -2,10 +2,9 @@ services:
   - type: web
     name: wecook-api
     env: node
-    buildCommand: |
-      yarn install
-      cd backend && yarn install && yarn build
-    startCommand: cd backend && yarn start
+    rootDir: backend
+    buildCommand: yarn install && yarn build
+    startCommand: yarn start
     envVars:
       - key: NODE_ENV
         value: production
@@ -17,10 +16,9 @@ services:
   - type: web
     name: wecook
     env: node
-    buildCommand: |
-      yarn install
-      cd web-app && yarn install && yarn build
-    startCommand: cd web-app && yarn start
+    rootDir: web-app
+    buildCommand: yarn install && yarn build
+    startCommand: yarn start
     envVars:
       - key: NODE_ENV
         value: production
