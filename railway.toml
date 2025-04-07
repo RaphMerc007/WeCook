@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd backend && yarn install && yarn build && cd ../web-app && yarn install && yarn build"
+
+[deploy]
+startCommand = "cd backend && yarn start"
+healthcheckPath = "/api/selections"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10 
