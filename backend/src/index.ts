@@ -1,10 +1,11 @@
 import express, { Request, Response } from "express";
-import cors from "cors";
 import mongoose from "mongoose";
-import multer, { FileFilterCallback } from "multer";
+import cors from "cors";
+import multer from "multer";
 import { SelectionsModel, MealModel } from "./models.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import { UserSelections } from "./types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +13,15 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3001;
 const mongoUri = process.env.MONGODB_URI || "mongodb://localhost:27017/wecook";
+
+// Configure CORS
+app.use(
+	cors({
+		origin: ["https://wecookselection.netlify.app", "http://localhost:5173"],
+		methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+		allowedHeaders: ["Content-Type", "Authorization"],
+	})
+);
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -34,7 +44,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // Middleware
-app.use(cors());
 app.use(express.json());
 
 // Serve uploaded files
@@ -58,13 +67,13 @@ app.use((req, res, next) => {
 mongoose
 	.connect(mongoUri)
 	.then(() => console.log("Connected to MongoDB"))
-	.catch((err) => console.error("MongoDB connection error:", err));
+	.catch((err: Error) => console.error("MongoDB connection error:", err));
 
 // Routes
-app.get("/api/selections", async (req, res) => {
+app.get("/api/selections", async (req: Request, res: Response) => {
 	try {
 		console.log("Fetching selections...");
-		const selections = await SelectionsModel.findOne();
+		const selections = await SelectionsModel.find();
 		console.log("Found selections:", selections);
 
 		if (!selections) {
@@ -91,14 +100,30 @@ app.get("/api/selections", async (req, res) => {
 	}
 });
 
-app.post("/api/selections", async (req, res) => {
+interface Selection {
+	weekNumber: number;
+	meals: Record<string, boolean>;
+	date?: string;
+}
+
+interface Meal {
+	id: string;
+	name: string;
+	imageUrl: string;
+	category: string;
+	price: number | string;
+	hasSideDish: boolean;
+	sideDishes: string[];
+}
+
+app.post("/api/selections", async (req: Request, res: Response) => {
 	try {
 		console.log("Saving selections:", req.body);
 		const { totalWeeks, selections } = req.body;
 		console.log("Parsed data:", { totalWeeks, selections });
 
 		// Process selections and ensure meals is a valid object
-		const processedSelections = selections.map((selection: any) => ({
+		const processedSelections = selections.map((selection: Selection) => ({
 			weekNumber: selection.weekNumber,
 			meals: selection.meals || {},
 			...(selection.date ? { date: selection.date } : {}), // Only include date if it was provided
@@ -142,13 +167,13 @@ app.post(
 			// Read and parse the JSON file
 			const fs = require("fs");
 			const fileContent = fs.readFileSync(req.file.path, "utf8");
-			const meals = JSON.parse(fileContent);
+			const meals = JSON.parse(fileContent) as Meal[];
 			console.log("Parsed meals from file:", meals);
 
 			// Save meals to database
 			console.log("Starting to save meals to database...");
 			const savedMeals = await Promise.all(
-				meals.map(async (meal: any) => {
+				meals.map(async (meal: Meal) => {
 					try {
 						// Generate a unique ID if not present
 						const mealId = meal.id || Math.random().toString(36).substring(7);
@@ -204,7 +229,7 @@ app.get("/api/meals/:id", async (req, res) => {
 });
 
 // Get all meals
-app.get("/api/meals", async (req, res) => {
+app.get("/api/meals", async (req: Request, res: Response) => {
 	try {
 		console.log("Fetching all meals...");
 		const { date } = req.query;
@@ -247,7 +272,7 @@ app.get("/api/meals", async (req, res) => {
 });
 
 // Import meals
-app.post("/api/meals", async (req, res) => {
+app.post("/api/meals", async (req: Request, res: Response) => {
 	try {
 		console.log("Importing meals:", req.body);
 		const { meals, date } = req.body;
@@ -346,3 +371,5 @@ app.use(
 app.listen(port, () => {
 	console.log(`Server running on port ${port}`);
 });
+
+export default app;

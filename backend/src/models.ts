@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { UserSelections } from "./types";
+import { UserSelections } from "./types.js";
 
 const WeekSelectionSchema = new mongoose.Schema({
 	weekNumber: { type: Number, required: true },
@@ -23,9 +23,5 @@ const MealSchema = new mongoose.Schema({
 	sideDishes: { type: [String], required: true },
 });
 
-export const SelectionsModel = mongoose.model<UserSelections>(
-	"Selections",
-	SelectionsSchema
-);
-
+export const SelectionsModel = mongoose.model("Selections", SelectionsSchema);
 export const MealModel = mongoose.model("Meal", MealSchema);

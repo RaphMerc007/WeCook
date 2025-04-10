@@ -29,8 +29,5 @@
 			"matches": ["http://localhost:3000/*"]
 		}
 	],
-	"host_permissions": [
-		"https://www.wecookmeals.ca/*",
-		"http://localhost:3000/*"
-	]
+	"host_permissions": ["http://localhost:3000/*"]
 }

@@ -17,5 +17,9 @@ export interface WeekSelection {
 export interface UserSelections {
 	totalWeeks: number;
 	currentWeek: number;
-	selections: WeekSelection[];
+	selections: {
+		weekNumber: number;
+		meals: Record<string, number>;
+		date?: Date;
+	}[];
 }
