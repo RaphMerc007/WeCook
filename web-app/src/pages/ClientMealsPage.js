@@ -19,39 +19,49 @@ export default function ClientMealsPage(container, store, router) {
 			console.log("Fetching selections...");
 			const selectionsResponse = await fetch(`${API_BASE_URL}/selections`);
 			const selectionsData = await selectionsResponse.json();
-			console.log("Received selections data:", selectionsData);
+			console.log(
+				"Raw selections data:",
+				JSON.stringify(selectionsData, null, 2)
+			);
 
-			// Clear old selections before storing the data
-			await clearOldSelections(selectionsData.selections);
+			// Get the first document from the selections array
+			const mainDocument =
+				selectionsData && selectionsData.length > 0 ? selectionsData[0] : null;
+			console.log("Main document:", JSON.stringify(mainDocument, null, 2));
 
-			// Store selections data for date lookup
-			store.setState({ selections: selectionsData.selections });
+			if (mainDocument && mainDocument.selections) {
+				// Clear old selections before storing the data
+				await clearOldSelections(mainDocument.selections);
 
-			// Get the first available date and select it
-			const dates = (selectionsData.selections || [])
-				.filter((s) => s.date)
-				.map((s) => {
-					try {
-						const date = new Date(s.date);
-						if (isNaN(date.getTime())) return null;
-						date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-						return date.toISOString().split("T")[0];
-					} catch (error) {
-						return null;
-					}
-				})
-				.filter((date) => date !== null)
-				.filter((date, index, self) => self.indexOf(date) === index)
-				.sort();
+				// Store selections data for date lookup
+				store.setState({ selections: mainDocument.selections });
 
-			if (dates.length > 0 && !selectedDate) {
-				selectedDate = dates[0];
-				loadDateMeals();
+				// Get the first available date and select it
+				const dates = mainDocument.selections
+					.filter((s) => s.date)
+					.map((s) => {
+						try {
+							const date = new Date(s.date);
+							if (isNaN(date.getTime())) return null;
+							date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+							return date.toISOString().split("T")[0];
+						} catch (error) {
+							return null;
+						}
+					})
+					.filter((date) => date !== null)
+					.filter((date, index, self) => self.indexOf(date) === index)
+					.sort();
+
+				if (dates.length > 0 && !selectedDate) {
+					selectedDate = dates[0];
+					loadDateMeals();
+				}
 			} else {
-				render();
+				console.log("No selections found in main document:", mainDocument);
 			}
 		} catch (error) {
-			console.error("Failed to load data:", error);
+			console.error("Error loading data:", error);
 		}
 	}
 
@@ -282,28 +292,30 @@ export default function ClientMealsPage(container, store, router) {
 
 		// Get unique dates from selections and sort them
 		const dates = (store.state.selections || [])
-			.filter((s) => s.date) // Only include selections that have a date
+			.filter((s) => s.date)
 			.map((s) => {
 				try {
 					const date = new Date(s.date);
-					// Check if date is valid
-					if (isNaN(date.getTime())) {
-						console.warn("Invalid date found:", s.date);
-						return null;
-					}
-					// Adjust for timezone offset to ensure consistent date
+					if (isNaN(date.getTime())) return null;
 					date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
 					return date.toISOString().split("T")[0];
 				} catch (error) {
-					console.warn("Error processing date:", s.date, error);
 					return null;
 				}
 			})
-			.filter((date) => date !== null) // Remove any invalid dates
-			.filter((date, index, self) => self.indexOf(date) === index) // Remove duplicates
+			.filter((date) => date !== null)
+			.filter((date, index, self) => self.indexOf(date) === index)
 			.sort();
 
 		console.log("Processed dates:", dates);
+
+		// Separate regular and family meals
+		const regularMeals = weekMeals.filter(
+			(meal) => !meal.category.toLowerCase().includes("family")
+		);
+		const familyMeals = weekMeals.filter((meal) =>
+			meal.category.toLowerCase().includes("family")
+		);
 
 		container.innerHTML = `
 			<div class="container">
@@ -333,34 +345,80 @@ export default function ClientMealsPage(container, store, router) {
 					${
 						weekMeals.length > 0
 							? `
-						<div class="grid">
-							${weekMeals
-								.map(
-									(meal) => `
-										<div class="card">
-											<img src="${formatImageUrl(meal.imageUrl)}" alt="${
-										meal.name
-									}" style="width: 100%; height: 200px; object-fit: cover;" />
-											<h3>${meal.name}</h3>
-											<p>${meal.category}</p>
-											<p>${new Date(selectedDate + "T00:00:00").toLocaleDateString()}</p>
-											<div class="quantity-control">
-												<button class="quantity-button" onclick="window.handleQuantityChange('${
-													meal.id
-												}', '${selectedDate}', -1)">
-													−
-												</button>
-												<span class="quantity-display">${meal.quantity}</span>
-												<button class="quantity-button" onclick="window.handleQuantityChange('${
-													meal.id
-												}', '${selectedDate}', 1)">
-													+
-												</button>
-											</div>
-										</div>
-									`
-								)
-								.join("")}
+						<div class="stack">
+							${
+								regularMeals.length > 0
+									? `
+								<h3>Regular Meals</h3>
+								<div class="grid">
+									${regularMeals
+										.map(
+											(meal) => `
+												<div class="card">
+													<img src="${formatImageUrl(meal.imageUrl)}" alt="${
+												meal.name
+											}" style="width: 100%; height: 200px; object-fit: cover;" />
+													<h3>${meal.name}</h3>
+													<p>${meal.category}</p>
+													<p>${new Date(selectedDate + "T00:00:00").toLocaleDateString()}</p>
+													<div class="quantity-control">
+														<button class="quantity-button" onclick="window.handleQuantityChange('${
+															meal.id
+														}', '${selectedDate}', -1)">
+															−
+														</button>
+														<span class="quantity-display">${meal.quantity}</span>
+														<button class="quantity-button" onclick="window.handleQuantityChange('${
+															meal.id
+														}', '${selectedDate}', 1)">
+															+
+														</button>
+													</div>
+												</div>
+											`
+										)
+										.join("")}
+								</div>
+							`
+									: ""
+							}
+
+							${
+								familyMeals.length > 0
+									? `
+								<h3>Family Meals</h3>
+								<div class="grid">
+									${familyMeals
+										.map(
+											(meal) => `
+												<div class="card">
+													<img src="${formatImageUrl(meal.imageUrl)}" alt="${
+												meal.name
+											}" style="width: 100%; height: 200px; object-fit: cover;" />
+													<h3>${meal.name}</h3>
+													<p>${meal.category}</p>
+													<p>${new Date(selectedDate + "T00:00:00").toLocaleDateString()}</p>
+													<div class="quantity-control">
+														<button class="quantity-button" onclick="window.handleQuantityChange('${
+															meal.id
+														}', '${selectedDate}', -1)">
+															−
+														</button>
+														<span class="quantity-display">${meal.quantity}</span>
+														<button class="quantity-button" onclick="window.handleQuantityChange('${
+															meal.id
+														}', '${selectedDate}', 1)">
+															+
+														</button>
+													</div>
+												</div>
+											`
+										)
+										.join("")}
+								</div>
+							`
+									: ""
+							}
 						</div>
 					`
 							: selectedDate !== null

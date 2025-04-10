@@ -17,27 +17,67 @@ export default function MealsOverviewPage(container, store) {
 			// Fetch selections
 			const selectionsResponse = await fetch(`${API_BASE_URL}/selections`);
 			const selectionsData = await selectionsResponse.json();
-			console.log("Received selections data:", selectionsData);
+			console.log(
+				"Raw selections data:",
+				JSON.stringify(selectionsData, null, 2)
+			);
 
 			// Convert selections array to our format
 			const selectionsMap = {};
-			selectionsData.selections.forEach((selection) => {
-				selectionsMap[`week${selection.weekNumber}`] = {
-					meals: selection.meals || {},
-					date: selection.date,
-				};
-			});
+			if (selectionsData && selectionsData.length > 0) {
+				const mainDocument = selectionsData[0]; // Get the first (and only) document
+				console.log("Main document:", JSON.stringify(mainDocument, null, 2));
 
-			console.log("Converted selections to map:", selectionsMap);
+				if (mainDocument && mainDocument.selections) {
+					console.log(
+						"Processing selections array with length:",
+						mainDocument.selections.length
+					);
+					mainDocument.selections.forEach((selection, index) => {
+						console.log(
+							`Processing selection ${index}:`,
+							JSON.stringify(selection, null, 2)
+						);
+						if (selection && selection.weekNumber) {
+							const weekKey = `week${selection.weekNumber}`;
+							console.log(`Adding selection for ${weekKey}:`, {
+								meals: selection.meals || {},
+								date: selection.date,
+							});
+							selectionsMap[weekKey] = {
+								meals: selection.meals || {},
+								date: selection.date,
+							};
+						} else {
+							console.log(
+								`Skipping selection ${index} - missing weekNumber:`,
+								selection
+							);
+						}
+					});
+				} else {
+					console.log("No selections found in main document:", mainDocument);
+				}
+			} else {
+				console.log("No selections data found or empty selections array");
+			}
+
+			console.log(
+				"Final selections map:",
+				JSON.stringify(selectionsMap, null, 2)
+			);
 			selectedMeals = selectionsMap;
-			totalWeeks = selectionsData.totalWeeks;
-			console.log("Set total weeks to:", selectionsData.totalWeeks);
+			totalWeeks = selectionsData?.[0]?.totalWeeks || 1;
+			console.log("Set total weeks to:", totalWeeks);
 
 			// Fetch all meals
 			const mealsResponse = await fetch(`${API_BASE_URL}/meals`);
 			const mealsData = await mealsResponse.json();
 			console.log("Received meals data:", mealsData);
-			store.setState({ meals: mealsData });
+
+			if (mealsData) {
+				store.setState({ meals: mealsData });
+			}
 
 			// Select the first available week with a date
 			const availableWeeks = Array.from({ length: totalWeeks }, (_, i) => ({
@@ -367,7 +407,7 @@ export default function MealsOverviewPage(container, store) {
 									? selectedMealsWithDetails
 											.map(
 												(meal) => `
-                    <div class="meal-list-item" style="display: flex; align-items: center; gap: 1rem; padding: 1rem; border: 1px solid #eee; border-radius: 8px;">
+                    <div class="meal-list-item" style="display: flex; align-items: center; gap: 1rem; padding: 1rem; border: 1px solid #888; border-radius: 8px;">
                       <img src="${
 												meal.imageUrl.startsWith("http")
 													? meal.imageUrl
@@ -377,7 +417,7 @@ export default function MealsOverviewPage(container, store) {
                            style="width: 80px; height: 80px; object-fit: cover; border-radius: 4px;" />
                       <div style="flex: 1;">
                         <h3 style="margin: 0;">${meal.name}</h3>
-                        <p style="margin: 0.5rem 0; color: #666;">${
+                        <p style="margin: 0.5rem 0; color: #aaa;">${
 													meal.category
 												}</p>
                       </div>
