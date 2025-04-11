@@ -173,7 +173,10 @@ export default function ClientMealsPage(container, store, router) {
 			// Get current selections
 			const response = await fetch(`${API_BASE_URL}/selections`);
 			const data = await response.json();
-			const mainDocument = data[0];
+			const mainDocument = data[0] || {
+				totalWeeks: 1,
+				selections: [],
+			};
 
 			// Find or create selection for the date
 			let selection = mainDocument.selections.find((s) => s.date === date);
