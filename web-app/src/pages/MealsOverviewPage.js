@@ -40,12 +40,23 @@ export default function MealsOverviewPage(container, store) {
 						);
 						if (selection && selection.weekNumber) {
 							const weekKey = `week${selection.weekNumber}`;
+							// Clean up the meals object to remove any undefined keys
+							const cleanedMeals = {};
+							if (selection.meals) {
+								Object.entries(selection.meals).forEach(
+									([mealId, quantity]) => {
+										if (mealId && mealId !== "undefined") {
+											cleanedMeals[mealId] = quantity;
+										}
+									}
+								);
+							}
 							console.log(`Adding selection for ${weekKey}:`, {
-								meals: selection.meals || {},
+								meals: cleanedMeals,
 								date: selection.date,
 							});
 							selectionsMap[weekKey] = {
-								meals: selection.meals || {},
+								meals: cleanedMeals,
 								date: selection.date,
 							};
 						} else {

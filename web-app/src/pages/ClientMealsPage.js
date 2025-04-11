@@ -30,14 +30,31 @@ export default function ClientMealsPage(container, store, router) {
 			console.log("Main document:", JSON.stringify(mainDocument, null, 2));
 
 			if (mainDocument && mainDocument.selections) {
+				// Clean up selections data to remove any undefined meal IDs
+				const cleanedSelections = mainDocument.selections.map((selection) => {
+					if (selection.meals) {
+						const cleanedMeals = {};
+						Object.entries(selection.meals).forEach(([mealId, quantity]) => {
+							if (mealId && mealId !== "undefined") {
+								cleanedMeals[mealId] = quantity;
+							}
+						});
+						return {
+							...selection,
+							meals: cleanedMeals,
+						};
+					}
+					return selection;
+				});
+
 				// Clear old selections before storing the data
-				await clearOldSelections(mainDocument.selections);
+				await clearOldSelections(cleanedSelections);
 
 				// Store selections data for date lookup
-				store.setState({ selections: mainDocument.selections });
+				store.setState({ selections: cleanedSelections });
 
 				// Get the first available date and select it
-				const dates = mainDocument.selections
+				const dates = cleanedSelections
 					.filter((s) => s.date)
 					.map((s) => {
 						try {
