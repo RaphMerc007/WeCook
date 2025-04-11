@@ -17,25 +17,23 @@ export default function ClientMealsPage(container, store, router) {
 			console.log("Fetching selections...");
 			const response = await fetch(`${API_BASE_URL}/selections`);
 			const data = await response.json();
-			console.log("Raw selections data:", data);
-
-			// Get the main document (first one)
 			const mainDocument = data[0];
 			console.log("Main document:", mainDocument);
-			console.log(
-				"Does mainDocument have selections?",
-				!!mainDocument?.selections
-			);
-			console.log(
-				"Number of selections:",
-				mainDocument?.selections?.length || 0
-			);
 
-			// Get client's selections
-			const clientResponse = await fetch(
-				`${API_BASE_URL}/clients/${clientId}/selections`
-			);
-			const clientSelections = await clientResponse.json();
+			// Get client's selections from the main document
+			const clientSelections =
+				mainDocument?.selections?.flatMap((selection) => {
+					const clientSelection = selection.clientSelections?.[clientId];
+					if (!clientSelection) return [];
+
+					return Object.entries(clientSelection.selectedMeals).map(
+						([mealId, quantity]) => ({
+							mealId,
+							quantity,
+							date: selection.date,
+						})
+					);
+				}) || [];
 			console.log("Client selections:", clientSelections);
 
 			// Process dates from client selections
@@ -177,48 +175,52 @@ export default function ClientMealsPage(container, store, router) {
 			}
 
 			// Get current selections
-			const response = await fetch(
-				`${API_BASE_URL}/clients/${clientId}/selections`
-			);
-			const selections = await response.json();
-			console.log("Current selectedMeals:", selections);
+			const response = await fetch(`${API_BASE_URL}/selections`);
+			const data = await response.json();
+			const mainDocument = data[0];
+			console.log("Current selections:", mainDocument);
 
-			// Find existing selection for this meal and date
-			const existingSelection = selections.find(
-				(s) => s.mealId === mealId && s.date === date
-			);
-			console.log("Existing selection:", existingSelection);
-
-			let newQuantity = (existingSelection?.quantity || 0) + change;
-			console.log("New quantity:", newQuantity);
-
-			if (newQuantity <= 0) {
-				console.log("Removing selection");
-				// Remove the selection
-				await fetch(`${API_BASE_URL}/clients/${clientId}/selections`, {
-					method: "DELETE",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						mealId,
-						date,
-					}),
-				});
-			} else {
-				// Update or create selection
-				await fetch(`${API_BASE_URL}/clients/${clientId}/selections`, {
-					method: "PUT",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						mealId,
-						date,
-						quantity: newQuantity,
-					}),
-				});
+			// Find the selection for the given date
+			const selection = mainDocument.selections.find((s) => s.date === date);
+			if (!selection) {
+				throw new Error("No selection found for the given date");
 			}
+
+			// Get or create client selections for this date
+			if (!selection.clientSelections) {
+				selection.clientSelections = {};
+			}
+			if (!selection.clientSelections[clientId]) {
+				selection.clientSelections[clientId] = {
+					clientId,
+					clientName: client.name,
+					selectedMeals: {},
+				};
+			}
+
+			// Update the quantity
+			const currentQuantity =
+				selection.clientSelections[clientId].selectedMeals[mealId] || 0;
+			const newQuantity = Math.max(0, currentQuantity + change);
+
+			if (newQuantity === 0) {
+				delete selection.clientSelections[clientId].selectedMeals[mealId];
+			} else {
+				selection.clientSelections[clientId].selectedMeals[mealId] =
+					newQuantity;
+			}
+
+			// Update the selections in the backend
+			await fetch(`${API_BASE_URL}/selections`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					totalWeeks: mainDocument.totalWeeks,
+					selections: mainDocument.selections,
+				}),
+			});
 
 			// Reload data to reflect changes
 			loadData();
