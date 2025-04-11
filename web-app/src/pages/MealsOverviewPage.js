@@ -53,10 +53,10 @@ export default function MealsOverviewPage(container, store) {
 							if (selection.meals) {
 								Object.entries(selection.meals).forEach(
 									([mealId, quantity]) => {
-										// Check if this is a valid meal ID from our store
-										const isValidMeal = store.state.meals.some(
-											(meal) => meal.id === mealId
-										);
+										// Check if this is a valid meal ID from our store or a generated ID
+										const isValidMeal =
+											store.state.meals.some((meal) => meal.id === mealId) ||
+											mealId.startsWith("generated-");
 										if (mealId && isValidMeal) {
 											cleanedMeals[mealId] = quantity;
 										}
