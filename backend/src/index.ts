@@ -184,12 +184,13 @@ apiRouter.post(
 	"/upload",
 	// @ts-ignore - Known type mismatch between multer and express
 	upload.single("file"),
-	async (
-		req: Express.Request & { file?: Express.Multer.File },
-		res: Response
-	) => {
+	async (req: Request & { file?: Express.Multer.File }, res: Response) => {
 		try {
 			console.log("=== POST /upload Debug ===");
+			console.log("Request headers:", req.headers);
+			console.log("Request body:", req.body);
+			console.log("Request file:", req.file);
+
 			if (!req.file) {
 				console.log("No file uploaded");
 				return res.status(400).json({ error: "No file uploaded" });
@@ -199,19 +200,64 @@ apiRouter.post(
 				filename: req.file.filename,
 				size: req.file.size,
 				path: req.file.path,
+				mimetype: req.file.mimetype,
 			});
 
+			// Verify uploads directory exists and is writable
+			try {
+				if (!fs.existsSync(uploadsDir)) {
+					console.log("Creating uploads directory:", uploadsDir);
+					fs.mkdirSync(uploadsDir, { recursive: true });
+				}
+				// Test write permissions
+				const testFile = path.join(uploadsDir, ".test");
+				fs.writeFileSync(testFile, "test");
+				fs.unlinkSync(testFile);
+				console.log("Uploads directory is writable:", uploadsDir);
+			} catch (error) {
+				const fsError = error as Error;
+				console.error("File system error:", fsError);
+				throw new Error(`Upload directory issue: ${fsError.message}`);
+			}
+
 			// Read and parse the JSON file
-			const fs = require("fs");
-			const fileContent = fs.readFileSync(req.file.path, "utf8");
-			const meals = JSON.parse(fileContent) as Meal[];
-			console.log(`Parsed ${meals.length} meals from file`);
-			console.log("First meal sample:", JSON.stringify(meals[0], null, 2));
+			let fileContent;
+			try {
+				fileContent = fs.readFileSync(req.file.path, "utf8");
+				console.log(
+					"File content read successfully, first 100 chars:",
+					fileContent.substring(0, 100)
+				);
+			} catch (error) {
+				const readError = error as Error;
+				console.error("Error reading uploaded file:", readError);
+				throw new Error(`Failed to read uploaded file: ${readError.message}`);
+			}
+
+			let meals;
+			try {
+				meals = JSON.parse(fileContent) as Meal[];
+				console.log(`Successfully parsed JSON. Found ${meals.length} meals`);
+				if (meals.length > 0) {
+					console.log("First meal sample:", JSON.stringify(meals[0], null, 2));
+				}
+			} catch (error) {
+				const parseError = error as Error;
+				console.error("Error parsing JSON:", parseError);
+				throw new Error(`Invalid JSON format: ${parseError.message}`);
+			}
 
 			// Save meals to database
 			console.log("Starting database import...");
-			const beforeCount = await MealModel.countDocuments();
-			console.log("Meals in database before import:", beforeCount);
+			let beforeCount;
+			try {
+				beforeCount = await MealModel.countDocuments();
+				console.log("Current meals in database:", beforeCount);
+			} catch (error) {
+				const dbError = error as Error;
+				console.error("Database count error:", dbError);
+				throw new Error(`Database count failed: ${dbError.message}`);
+			}
 
 			const savedMeals = await Promise.all(
 				meals.map(async (meal: Meal) => {
@@ -223,27 +269,42 @@ apiRouter.post(
 							{ ...meal, id: mealId },
 							{ upsert: true, new: true }
 						);
-						console.log(
-							`Saved meal ${mealId}:`,
-							JSON.stringify(savedMeal, null, 2)
-						);
+						console.log(`Saved meal ${mealId}`);
 						return savedMeal;
 					} catch (error) {
-						console.error(`Failed to save meal ${meal.name}:`, error);
-						throw error;
+						const mealError = error as Error;
+						console.error(`Failed to save meal ${meal.name}:`, mealError);
+						throw new Error(
+							`Failed to save meal ${meal.name}: ${mealError.message}`
+						);
 					}
 				})
 			);
 
-			const afterCount = await MealModel.countDocuments();
-			console.log("Database import complete");
-			console.log("Meals in database after import:", afterCount);
-			console.log("New meals added:", afterCount - beforeCount);
+			let afterCount;
+			try {
+				afterCount = await MealModel.countDocuments();
+				console.log("Database import complete");
+				console.log("Final meals count:", afterCount);
+				console.log("New meals added:", afterCount - beforeCount);
+			} catch (error) {
+				const countError = error as Error;
+				console.error("Final count error:", countError);
+				throw new Error(`Final count failed: ${countError.message}`);
+			}
+
+			// Clean up uploaded file
+			try {
+				fs.unlinkSync(req.file.path);
+				console.log("Cleaned up uploaded file:", req.file.path);
+			} catch (error) {
+				const cleanupError = error as Error;
+				console.warn("Failed to cleanup uploaded file:", cleanupError);
+			}
 
 			res.json({
 				message: "File uploaded and processed successfully",
 				filename: req.file.filename,
-				path: req.file.path,
 				mealsCount: meals.length,
 				savedCount: savedMeals.length,
 				databaseStats: {
@@ -253,8 +314,18 @@ apiRouter.post(
 				},
 			});
 		} catch (error) {
-			console.error("Error in POST /upload:", error);
-			res.status(500).json({ error: "Failed to process file" });
+			const uploadError = error as Error;
+			console.error("=== Upload Error Details ===");
+			console.error("Error type:", uploadError.constructor.name);
+			console.error("Error message:", uploadError.message);
+			console.error("Error stack:", uploadError.stack);
+			console.error("=== End Error Details ===");
+
+			res.status(500).json({
+				error: "Failed to process file",
+				details: uploadError.message,
+				type: uploadError.constructor.name,
+			});
 		}
 	}
 );
