@@ -6,9 +6,16 @@ import { SelectionsModel, MealModel } from "./models.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import { UserSelections } from "./types.js";
+import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, "../uploads");
+if (!fs.existsSync(uploadsDir)) {
+	fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -30,7 +37,7 @@ const storage = multer.diskStorage({
 		file: Express.Multer.File,
 		cb: (error: Error | null, destination: string) => void
 	) {
-		cb(null, "uploads/");
+		cb(null, uploadsDir);
 	},
 	filename: function (
 		req: Express.Request,
@@ -47,15 +54,7 @@ const upload = multer({ storage: storage });
 app.use(express.json());
 
 // Serve uploaded files
-app.use("/uploads", express.static("uploads"));
-
-// Serve frontend in production
-if (process.env.NODE_ENV === "production") {
-	app.use(express.static(path.join(__dirname, "../../web-app/dist")));
-	app.get("*", (req, res) => {
-		res.sendFile(path.join(__dirname, "../../web-app/dist/index.html"));
-	});
-}
+app.use("/uploads", express.static(uploadsDir));
 
 // Logging middleware
 app.use((req, res, next) => {
