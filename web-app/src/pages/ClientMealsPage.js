@@ -17,7 +17,7 @@ export default function ClientMealsPage(container, store, router) {
 
 			// Fetch selections first
 			console.log("Fetching selections...");
-			const selectionsResponse = await fetch(`${API_BASE_URL}/selections`);
+			const selectionsResponse = await fetch(`${API_BASE_URL}/api/selections`);
 			const selectionsData = await selectionsResponse.json();
 			console.log(
 				"Raw selections data:",
@@ -220,7 +220,7 @@ export default function ClientMealsPage(container, store, router) {
 		try {
 			// Update the client's selections in the database
 			const response = await fetch(
-				`${API_BASE_URL}/clients/${clientId}/selections`,
+				`${API_BASE_URL}/api/clients/${clientId}/selections`,
 				{
 					method: "PUT",
 					headers: {

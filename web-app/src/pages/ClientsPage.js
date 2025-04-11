@@ -40,7 +40,7 @@ export default function ClientsPage(container, store, router) {
 			if (editingClient) {
 				// Update existing client
 				const response = await fetch(
-					`${API_BASE_URL}/clients/${editingClient}`,
+					`${API_BASE_URL}/api/clients/${editingClient}`,
 					{
 						method: "PUT",
 						headers: {
@@ -61,7 +61,7 @@ export default function ClientsPage(container, store, router) {
 				});
 			} else {
 				// Create new client
-				const response = await fetch(`${API_BASE_URL}/clients`, {
+				const response = await fetch(`${API_BASE_URL}/api/clients`, {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
@@ -115,7 +115,7 @@ export default function ClientsPage(container, store, router) {
 
 	async function removeClient(clientId) {
 		try {
-			const response = await fetch(`${API_BASE_URL}/clients/${clientId}`, {
+			const response = await fetch(`${API_BASE_URL}/api/clients/${clientId}`, {
 				method: "DELETE",
 			});
 
