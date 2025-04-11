@@ -289,6 +289,7 @@ export default function ClientMealsPage(container, store, router) {
 			isLoading,
 			clientId,
 		});
+		console.log("Store state:", store.state);
 
 		const client = store.state.clients.find((c) => c.id === clientId);
 		console.log("Found client in render:", client);
