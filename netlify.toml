@@ -1,5 +1,5 @@
 [build]
-  command = "yarn install && cd web-app && yarn install && yarn build"
+  command = "cd web-app && yarn install && yarn add typescript@5.2.2 --dev && yarn build"
   publish = "web-app/dist"
 
 [build.environment]
