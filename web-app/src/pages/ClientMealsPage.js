@@ -29,54 +29,27 @@ export default function ClientMealsPage(container, store, router) {
 				selectionsData && selectionsData.length > 0 ? selectionsData[0] : null;
 			console.log("Main document:", JSON.stringify(mainDocument, null, 2));
 
-			if (mainDocument && mainDocument.selections) {
-				// Clean up selections data to remove any undefined meal IDs
-				const cleanedSelections = mainDocument.selections.map((selection) => {
-					if (selection.meals) {
-						const cleanedMeals = {};
-						Object.entries(selection.meals).forEach(([mealId, quantity]) => {
-							if (mealId && mealId !== "undefined") {
-								cleanedMeals[mealId] = quantity;
-							}
-						});
-						return {
-							...selection,
-							meals: cleanedMeals,
-						};
-					}
-					return selection;
-				});
+			// Get client's selected meals
+			const client = store.state.clients.find((c) => c.id === clientId);
+			const clientSelections = client?.selectedMeals || [];
+			console.log("Client selections:", clientSelections);
 
-				// Clear old selections before storing the data
-				await clearOldSelections(cleanedSelections);
+			// Get unique dates from client selections
+			const dates = clientSelections
+				.map((selection) => selection.date)
+				.filter((date, index, self) => self.indexOf(date) === index)
+				.sort();
 
-				// Store selections data for date lookup
-				store.setState({ selections: cleanedSelections });
+			console.log("Processed dates:", dates);
 
-				// Get the first available date and select it
-				const dates = cleanedSelections
-					.filter((s) => s.date)
-					.map((s) => {
-						try {
-							const date = new Date(s.date);
-							if (isNaN(date.getTime())) return null;
-							date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-							return date.toISOString().split("T")[0];
-						} catch (error) {
-							return null;
-						}
-					})
-					.filter((date) => date !== null)
-					.filter((date, index, self) => self.indexOf(date) === index)
-					.sort();
-
-				if (dates.length > 0 && !selectedDate) {
-					selectedDate = dates[0];
-					loadDateMeals();
-				}
-			} else {
-				console.log("No selections found in main document:", mainDocument);
+			// If we have dates but no selected date, select the first one
+			if (dates.length > 0 && !selectedDate) {
+				selectedDate = dates[0];
+				loadDateMeals();
 			}
+
+			// Store selections data for date lookup
+			store.setState({ selections: mainDocument?.selections || [] });
 		} catch (error) {
 			console.error("Error loading data:", error);
 		}
@@ -146,11 +119,6 @@ export default function ClientMealsPage(container, store, router) {
 
 		isLoading = true;
 		try {
-			// Format the date to match the API's expected format
-			const formattedDate = new Date(
-				selectedDate + "T00:00:00.000Z"
-			).toISOString();
-
 			// Get all meals from the store
 			const allMeals = store.state.meals || [];
 			console.log("All meals from store:", allMeals);
