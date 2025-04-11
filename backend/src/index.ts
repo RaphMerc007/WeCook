@@ -237,42 +237,48 @@ apiRouter.get("/meals/:id", async (req, res) => {
 // Get all meals
 apiRouter.get("/meals", async (req: Request, res: Response) => {
 	try {
-		console.log("Fetching all meals...");
+		console.log("=== GET /meals Debug Log ===");
+		console.log("Query parameters:", req.query);
 		const { date } = req.query;
 
 		if (date) {
-			// If date is provided, get meals for that specific date
+			console.log(`Fetching meals for date: ${date}`);
 			const selectionsDoc = await SelectionsModel.findOne();
+			console.log("Selections document:", selectionsDoc);
+
 			if (!selectionsDoc) {
+				console.log("No selections document found");
 				return res.json([]);
 			}
 
-			// Find the selection for the given date
 			const selection = selectionsDoc.selections.find(
 				(s: any) => new Date(s.date).toISOString().split("T")[0] === date
 			);
+			console.log("Found selection for date:", selection);
 
 			if (!selection) {
+				console.log("No selection found for the given date");
 				return res.json([]);
 			}
 
-			// Get all meals and filter by the ones in the selection
 			const allMeals = await MealModel.find();
+			console.log("All meals in database:", allMeals);
 			const selectedMealIds = Object.keys(selection.meals);
+			console.log("Selected meal IDs:", selectedMealIds);
 			const filteredMeals = allMeals.filter((meal) =>
 				selectedMealIds.includes(meal.id)
 			);
+			console.log("Filtered meals:", filteredMeals);
 
-			console.log(`Found ${filteredMeals.length} meals for date ${date}`);
 			return res.json(filteredMeals);
 		}
 
-		// If no date provided, return all meals
+		console.log("Fetching all meals (no date filter)");
 		const meals = await MealModel.find();
-		console.log(`Found ${meals.length} meals`);
+		console.log("All meals in database:", meals);
 		res.json(meals);
 	} catch (error) {
-		console.error("Error fetching meals:", error);
+		console.error("Error in GET /meals:", error);
 		res.status(500).json({ error: "Failed to fetch meals" });
 	}
 });
@@ -280,20 +286,21 @@ apiRouter.get("/meals", async (req: Request, res: Response) => {
 // Import meals
 apiRouter.post("/meals", async (req: Request, res: Response) => {
 	try {
-		console.log("Importing meals:", req.body);
+		console.log("=== POST /meals Debug Log ===");
+		console.log("Request body:", req.body);
 		const { meals, date } = req.body;
 
 		if (!Array.isArray(meals)) {
+			console.log("Invalid meals data - not an array");
 			return res.status(400).json({ error: "Meals must be an array" });
 		}
 
-		// Save meals to database
+		console.log(`Importing ${meals.length} meals`);
 		const savedMeals = await Promise.all(
 			meals.map(async (meal: any) => {
 				try {
-					// Generate a unique ID if not present
 					const mealId = meal.id || Math.random().toString(36).substring(7);
-					console.log(`Saving meal ${mealId}:`, meal.name);
+					console.log(`Processing meal ${mealId}:`, meal.name);
 					const savedMeal = await MealModel.findOneAndUpdate(
 						{ id: mealId },
 						{ ...meal, id: mealId },
@@ -308,34 +315,35 @@ apiRouter.post("/meals", async (req: Request, res: Response) => {
 			})
 		);
 
-		// If a date is provided, update the selections
 		if (date) {
+			console.log(`Updating selections for date: ${date}`);
 			const selectionsDoc = await SelectionsModel.findOne();
+			console.log("Current selections document:", selectionsDoc);
 			const weekNumber = selectionsDoc
 				? selectionsDoc.selections.length + 1
 				: 1;
+			console.log("New week number:", weekNumber);
 
-			// Create a new selection for this week
 			const newSelection = {
 				weekNumber,
 				meals: {} as Record<string, number>,
 				date: new Date(date),
 			};
 
-			// Set quantity to 1 for all imported meals
 			savedMeals.forEach((meal) => {
 				newSelection.meals[meal.id] = 1;
 			});
+			console.log("New selection to be added:", newSelection);
 
-			// Update or create the selections document
-			await SelectionsModel.findOneAndUpdate(
+			const updatedSelections = await SelectionsModel.findOneAndUpdate(
 				{},
 				{
 					$push: { selections: newSelection },
 					$set: { totalWeeks: weekNumber },
 				},
-				{ upsert: true }
+				{ upsert: true, new: true }
 			);
+			console.log("Updated selections document:", updatedSelections);
 		}
 
 		res.json({
@@ -343,7 +351,7 @@ apiRouter.post("/meals", async (req: Request, res: Response) => {
 			mealsCount: savedMeals.length,
 		});
 	} catch (error) {
-		console.error("Error importing meals:", error);
+		console.error("Error in POST /meals:", error);
 		res.status(500).json({ error: "Failed to import meals" });
 	}
 });
