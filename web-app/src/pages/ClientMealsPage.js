@@ -151,11 +151,9 @@ export default function ClientMealsPage(container, store, router) {
 				selectedDate + "T00:00:00.000Z"
 			).toISOString();
 
-			// Fetch meals for the selected date
-			const mealsResponse = await fetch(
-				`${API_BASE_URL}/meals?date=${formattedDate}`
-			);
-			const mealsData = await mealsResponse.json();
+			// Get all meals from the store
+			const allMeals = store.state.meals || [];
+			console.log("All meals from store:", allMeals);
 
 			// Get client's selected meals for this date
 			const client = store.state.clients.find((c) => c.id === clientId);
@@ -163,8 +161,10 @@ export default function ClientMealsPage(container, store, router) {
 			const dateSelections = selectedMeals.filter(
 				(m) => m.date === selectedDate
 			);
+			console.log("Date selections:", dateSelections);
 
-			weekMeals = mealsData.map((meal) => {
+			// Map the meals with their quantities
+			weekMeals = allMeals.map((meal) => {
 				const selection = dateSelections.find((s) => s.mealId === meal.id);
 				return {
 					...meal,
@@ -289,6 +289,7 @@ export default function ClientMealsPage(container, store, router) {
 			isLoading,
 			clientId,
 		});
+
 		console.log("Store state:", store.state);
 
 		const client = store.state.clients.find((c) => c.id === clientId);
