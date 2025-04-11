@@ -6,8 +6,10 @@ console.log("VITE_API_URL:", import.meta.env.VITE_API_URL);
 const apiUrl = import.meta.env.VITE_API_URL;
 export const API_BASE_URL = import.meta.env.PROD
 	? apiUrl.startsWith("http")
-		? apiUrl
-		: `https://${apiUrl}`
+		? apiUrl.endsWith("/api")
+			? apiUrl
+			: `${apiUrl}/api`
+		: `https://${apiUrl}/api`
 	: "/api";
 
 if (import.meta.env.PROD && !API_BASE_URL.startsWith("http")) {
