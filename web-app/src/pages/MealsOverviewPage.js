@@ -141,12 +141,23 @@ export default function MealsOverviewPage(container, store) {
 		const mealIds = new Set();
 		Object.values(selectedMeals).forEach((weekData) => {
 			if (weekData.meals) {
-				Object.entries(weekData.meals)
-					.filter(
-						([mealId, quantity]) =>
-							mealId && mealId !== "undefined" && quantity > 0
-					)
-					.forEach(([mealId]) => mealIds.add(mealId));
+				// Convert meals object to array of entries and filter
+				const mealEntries = Object.entries(weekData.meals);
+				console.log("Processing meals entries:", mealEntries);
+
+				mealEntries
+					.filter(([mealId, quantity]) => {
+						const isValid = mealId && mealId !== "undefined" && quantity > 0;
+						console.log(
+							`Meal ${mealId} with quantity ${quantity} is valid:`,
+							isValid
+						);
+						return isValid;
+					})
+					.forEach(([mealId]) => {
+						console.log("Adding meal ID to set:", mealId);
+						mealIds.add(mealId);
+					});
 			}
 		});
 
@@ -155,6 +166,7 @@ export default function MealsOverviewPage(container, store) {
 		overviewMeals = {};
 		store.state.meals.forEach((meal) => {
 			if (mealIds.has(meal.id)) {
+				console.log("Found meal in store:", meal.id);
 				overviewMeals[meal.id] = meal;
 			}
 		});
