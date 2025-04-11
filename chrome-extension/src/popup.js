@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", function () {
 	console.log("Popup loaded");
 	const extractButton = document.getElementById("extract-button");
-	// const sendToAppButton = document.getElementById("send-to-app-button");
+	const sendToAppButton = document.getElementById("send-to-app-button");
 	const statusDiv = document.getElementById("status");
 	const regularMealsList = document.querySelector("#regular-meals .meal-list");
 	const familyMealsList = document.querySelector("#family-meals .meal-list");
@@ -114,72 +114,90 @@ document.addEventListener("DOMContentLoaded", function () {
 		}
 	});
 
-	// sendToAppButton.addEventListener("click", async () => {
-	// 	console.log("[Popup] Send to app button clicked");
-	// 	try {
-	// 		// Get the stored meals
-	// 		const result = await chrome.storage.local.get("meals");
-	// 		const meals = result.meals || [];
-	// 		console.log("[Popup] Retrieved stored meals:", meals);
+	sendToAppButton.addEventListener("click", async () => {
+		console.log("[Popup] Send to app button clicked");
+		try {
+			// Get the stored meals
+			const result = await chrome.storage.local.get("meals");
+			const meals = result.meals || [];
+			console.log("[Popup] Retrieved stored meals:", meals);
 
-	// 		if (!meals || meals.length === 0) {
-	// 			console.log("[Popup] No meals found in storage");
-	// 			showStatus("No meals to send. Please extract meals first.", "error");
-	// 			return;
-	// 		}
+			if (!meals || meals.length === 0) {
+				console.log("[Popup] No meals found in storage");
+				showStatus("No meals to send. Please extract meals first.", "error");
+				return;
+			}
 
-	// 		// Format meals for the web app
-	// 		const formattedMeals = meals.map((meal) => ({
-	// 			id: meal.id,
-	// 			name: meal.name,
-	// 			imageUrl: meal.imageUrl,
-	// 			category: meal.category,
-	// 			price: meal.price,
-	// 			hasSideDish: meal.hasSideDish,
-	// 			sideDishes: meal.sideDishes || [],
-	// 		}));
+			// Format meals for the web app
+			const formattedMeals = meals.map((meal) => ({
+				id: meal.id,
+				name: meal.name,
+				imageUrl: meal.imageUrl,
+				category: meal.category,
+				price: meal.price,
+				hasSideDish: meal.hasSideDish,
+				sideDishes: meal.sideDishes || [],
+			}));
 
-	// 		// Create a download link
-	// 		const mealsJSON = JSON.stringify(formattedMeals, null, 2);
-	// 		const blob = new Blob([mealsJSON], { type: "application/json" });
-	// 		const url = URL.createObjectURL(blob);
-	// 		const a = document.createElement("a");
-	// 		a.href = url;
-	// 		a.download = "wecook-meals.json";
-	// 		document.body.appendChild(a);
-	// 		a.click();
-	// 		document.body.removeChild(a);
-	// 		URL.revokeObjectURL(url);
+			// Create a download link
+			const mealsJSON = JSON.stringify(formattedMeals, null, 2);
+			const blob = new Blob([mealsJSON], { type: "application/json" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = "wecook-meals.json";
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
 
-	// 		// Open the web app import page
-	// 		chrome.tabs.create({ url: "http://localhost:3000/import" }, (tab) => {
-	// 			console.log("[Popup] Web app import page opened");
-	// 		});
+			// Open the web app import page
+			chrome.tabs.create(
+				{ url: "https://wecookselection.netlify.app/import" },
+				(tab) => {
+					console.log("[Popup] Web app import page opened");
+				}
+			);
 
-	// 		// Show success status
-	// 		showStatus(
-	// 			"Meals data downloaded! You can now upload this file in the web app.",
-	// 			"success"
-	// 		);
-	// 	} catch (error) {
-	// 		console.error("[Popup] Error preparing meals data:", error);
-	// 		showStatus("Failed to prepare meals data for download", "error");
-	// 	}
-	// });
+			// Show success status
+			showStatus(
+				"Meals data downloaded! You can now upload this file in the web app.",
+				"success"
+			);
+		} catch (error) {
+			console.error("[Popup] Error preparing meals data:", error);
+			showStatus("Failed to prepare meals data for download", "error");
+		}
+	});
 
 	importButton.addEventListener("click", async () => {
 		console.log("[Popup] Import button clicked");
 		try {
-			const response = await fetch("http://localhost:3001/api/meals", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					meals: extractedMeals,
-					date: extractedDate,
-				}),
-			});
+			const response = await fetch(
+				"https://wecook-production.up.railway.app/api/selections",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"Access-Control-Allow-Origin": "*",
+					},
+					credentials: "include",
+					mode: "cors",
+					body: JSON.stringify({
+						totalWeeks: 1,
+						selections: [
+							{
+								weekNumber: 1,
+								meals: extractedMeals.reduce((acc, meal) => {
+									acc[meal.id] = true;
+									return acc;
+								}, {}),
+								date: extractedDate,
+							},
+						],
+					}),
+				}
+			);
 
 			if (response.ok) {
 				showStatus("Import successful!", "success");

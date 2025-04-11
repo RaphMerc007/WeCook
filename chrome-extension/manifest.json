@@ -29,5 +29,9 @@
 			"matches": ["http://localhost:3000/*"]
 		}
 	],
-	"host_permissions": ["http://localhost:3000/*"]
+	"host_permissions": [
+		"http://localhost:3000/*",
+		"https://wecookselection.netlify.app/*",
+		"https://wecook-production.up.railway.app/*"
+	]
 }

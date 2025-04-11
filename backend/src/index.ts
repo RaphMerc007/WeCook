@@ -24,7 +24,11 @@ const mongoUri = process.env.MONGODB_URI || "mongodb://localhost:27017/wecook";
 // Configure CORS
 app.use(
 	cors({
-		origin: ["https://wecookselection.netlify.app", "http://localhost:5173"],
+		origin: [
+			"https://wecookselection.netlify.app",
+			"http://localhost:5173",
+			"chrome-extension://*",
+		],
 		methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 		allowedHeaders: ["Content-Type", "Authorization"],
 		credentials: true,
@@ -155,11 +159,24 @@ apiRouter.post("/selections", async (req: Request, res: Response) => {
 		console.log("Parsed data:", { totalWeeks, selections });
 
 		// Process selections and ensure meals is a valid object
-		const processedSelections = selections.map((selection: Selection) => ({
-			weekNumber: selection.weekNumber,
-			meals: selection.meals || {},
-			...(selection.date ? { date: selection.date } : {}), // Only include date if it was provided
-		}));
+		const processedSelections = selections.map((selection: Selection) => {
+			// Clean up meals object to remove invalid entries
+			const cleanedMeals: Record<string, boolean> = {};
+			if (selection.meals) {
+				Object.entries(selection.meals).forEach(([mealId, value]) => {
+					// Only include valid meal IDs
+					if (mealId && mealId !== "undefined") {
+						cleanedMeals[mealId] = value;
+					}
+				});
+			}
+
+			return {
+				weekNumber: selection.weekNumber,
+				meals: cleanedMeals,
+				...(selection.date ? { date: selection.date } : {}), // Only include date if it was provided
+			};
+		});
 		console.log("Processed selections:", processedSelections);
 
 		const result = await SelectionsModel.findOneAndUpdate(
