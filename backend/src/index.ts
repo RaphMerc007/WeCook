@@ -222,8 +222,8 @@ apiRouter.post("/selections", async (req: Request, res: Response) => {
 			const cleanedMeals: Record<string, boolean> = {};
 			if (selection.meals) {
 				Object.entries(selection.meals).forEach(([mealId, value]) => {
-					// Only include valid meal IDs
-					if (mealId && mealId !== "undefined") {
+					// Only include valid meal IDs that are not undefined and not the string "undefined"
+					if (mealId && mealId !== "undefined" && typeof mealId === "string") {
 						cleanedMeals[mealId] = value;
 					}
 				});

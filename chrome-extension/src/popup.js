@@ -189,7 +189,9 @@ document.addEventListener("DOMContentLoaded", function () {
 							{
 								weekNumber: 1,
 								meals: extractedMeals.reduce((acc, meal) => {
-									acc[meal.id] = true;
+									if (meal.id && typeof meal.id === "string") {
+										acc[meal.id] = true;
+									}
 									return acc;
 								}, {}),
 								date: extractedDate,
