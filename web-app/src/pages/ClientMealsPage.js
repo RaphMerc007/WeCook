@@ -160,75 +160,73 @@ export default function ClientMealsPage(container, store, router) {
 		}
 	}
 
-	async function handleQuantityChange(mealId, date, change) {
+	const handleQuantityChange = async (mealId, date, change) => {
 		try {
-			console.log("handleQuantityChange called with:", {
-				mealId,
-				date,
-				change,
-			});
 			const client = store.state.clients.find((c) => c.id === clientId);
-			console.log("Found client:", client);
-
 			if (!client) {
-				throw new Error("Client not found");
+				console.error("Client not found");
+				return;
 			}
 
 			// Get current selections
 			const response = await fetch(`${API_BASE_URL}/selections`);
-			const data = await response.json();
-			const mainDocument = data[0];
-			console.log("Current selections:", mainDocument);
+			const mainDocument = await response.json();
 
-			// Find the selection for the given date
-			const selection = mainDocument.selections.find((s) => s.date === date);
+			// Find or create selection for the date
+			let selection = mainDocument.selections.find((s) => s.date === date);
 			if (!selection) {
-				throw new Error("No selection found for the given date");
-			}
-
-			// Get or create client selections for this date
-			if (!selection.clientSelections) {
-				selection.clientSelections = {};
-			}
-			if (!selection.clientSelections[clientId]) {
-				selection.clientSelections[clientId] = {
-					clientId,
-					clientName: client.name,
-					selectedMeals: {},
+				// Create new selection if it doesn't exist
+				selection = {
+					date,
+					clients: [],
 				};
+				mainDocument.selections.push(selection);
 			}
 
-			// Update the quantity
-			const currentQuantity =
-				selection.clientSelections[clientId].selectedMeals[mealId] || 0;
+			// Find or create client selection
+			let clientSelection = selection.clients.find(
+				(c) => c.clientId === clientId
+			);
+			if (!clientSelection) {
+				clientSelection = {
+					clientId,
+					meals: {},
+				};
+				selection.clients.push(clientSelection);
+			}
+
+			// Update meal quantity
+			const currentQuantity = clientSelection.meals[mealId] || 0;
 			const newQuantity = Math.max(0, currentQuantity + change);
 
-			if (newQuantity === 0) {
-				delete selection.clientSelections[clientId].selectedMeals[mealId];
+			if (newQuantity > 0) {
+				clientSelection.meals[mealId] = newQuantity;
 			} else {
-				selection.clientSelections[clientId].selectedMeals[mealId] =
-					newQuantity;
+				delete clientSelection.meals[mealId];
 			}
 
-			// Update the selections in the backend
-			await fetch(`${API_BASE_URL}/selections`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					totalWeeks: mainDocument.totalWeeks,
-					selections: mainDocument.selections,
-				}),
-			});
+			// Update the main document
+			const updateResponse = await fetch(
+				`${API_BASE_URL}/selections/${mainDocument._id}`,
+				{
+					method: "PUT",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(mainDocument),
+				}
+			);
 
-			// Reload data to reflect changes
+			if (!updateResponse.ok) {
+				throw new Error("Failed to update selections");
+			}
+
+			// Refresh the data
 			loadData();
 		} catch (error) {
 			console.error("Error updating client selections:", error);
-			alert("Failed to update selections. Please try again.");
 		}
-	}
+	};
 
 	function formatImageUrl(imageUrl) {
 		if (!imageUrl) return "";
