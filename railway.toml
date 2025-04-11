@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "cd backend && yarn install && yarn build"
+buildCommand = "cd backend && yarn global add typescript && yarn install && yarn build"
 
 [deploy]
 startCommand = "cd backend && yarn start"
