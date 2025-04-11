@@ -58,19 +58,75 @@ const upload = multer({ storage: storage });
 // Middleware
 app.use(express.json());
 
-// Debug middleware - log all requests
+// Add caching for frequently accessed data
+const cache = {
+	meals: null as any,
+	selections: null as any,
+	lastUpdated: 0,
+};
+
+// Cache duration in milliseconds (5 minutes)
+const CACHE_DURATION = 5 * 60 * 1000;
+
+// Middleware to throttle requests
+const requestThrottle = new Map<string, number>();
+const THROTTLE_WINDOW = 1000; // 1 second
+const MAX_REQUESTS = 10; // Max requests per window
+
+// Throttle middleware
+const throttleMiddleware = (req: Request, res: Response, next: Function) => {
+	const ip = req.ip || "unknown";
+	const now = Date.now();
+	const windowStart = now - THROTTLE_WINDOW;
+
+	// Clean up old entries
+	for (const [key, timestamp] of requestThrottle.entries()) {
+		if (timestamp < windowStart) {
+			requestThrottle.delete(key);
+		}
+	}
+
+	// Count requests in current window
+	const requestCount = Array.from(requestThrottle.values()).filter(
+		(timestamp) => timestamp > windowStart
+	).length;
+
+	if (requestCount >= MAX_REQUESTS) {
+		return res.status(429).json({ error: "Too many requests" });
+	}
+
+	requestThrottle.set(ip, now);
+	next();
+};
+
+// Optimized logging middleware
 app.use((req, res, next) => {
-	console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-	console.log("Headers:", req.headers);
+	// Only log in development or for important endpoints
+	if (
+		process.env.NODE_ENV === "development" ||
+		req.path === "/health" ||
+		req.path.startsWith("/api/")
+	) {
+		console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+	}
 	next();
 });
 
-// MongoDB connection
+// Add connection pooling configuration
+mongoose.set("maxPoolSize", 10);
+mongoose.set("minPoolSize", 2);
+mongoose.set("serverSelectionTimeoutMS", 5000);
+mongoose.set("socketTimeoutMS", 45000);
+
+// Optimize MongoDB connection
 mongoose
-	.connect(mongoUri)
+	.connect(mongoUri, {
+		connectTimeoutMS: 10000,
+		serverSelectionTimeoutMS: 5000,
+		socketTimeoutMS: 45000,
+	})
 	.then(() => {
-		console.log("=== MongoDB Connection Debug ===");
-		console.log("Connected to MongoDB at:", mongoUri);
+		console.log("Connected to MongoDB");
 		// Check if collections exist and count documents
 		Promise.all([
 			MealModel.countDocuments(),
@@ -81,13 +137,16 @@ mongoose
 			console.log("- Selections collection:", { count: selectionsCount });
 		});
 	})
-	.catch((err: Error) => console.error("MongoDB connection error:", err));
+	.catch((err: Error) => {
+		console.error("MongoDB connection error:", err);
+		process.exit(1);
+	});
 
 // Create Router for API routes
 const apiRouter = express.Router();
 
-// Health check endpoint
-apiRouter.get("/health", async (req, res) => {
+// Health check endpoint with reduced logging
+apiRouter.get("/health", throttleMiddleware, async (req, res) => {
 	const dbState = {
 		meals: await MealModel.countDocuments(),
 		selections: await SelectionsModel.countDocuments(),
@@ -100,41 +159,46 @@ apiRouter.get("/health", async (req, res) => {
 });
 
 // Mount all other API routes
-apiRouter.get("/selections", async (req: Request, res: Response) => {
-	try {
-		console.log("=== GET /selections Debug ===");
-		const selectionsCount = await SelectionsModel.countDocuments();
-		console.log("Current selections count:", selectionsCount);
+apiRouter.get(
+	"/selections",
+	throttleMiddleware,
+	async (req: Request, res: Response) => {
+		try {
+			// Check cache first
+			if (cache.selections && Date.now() - cache.lastUpdated < CACHE_DURATION) {
+				return res.json(cache.selections);
+			}
 
-		const selections = await SelectionsModel.find();
-		console.log("Found selections:", JSON.stringify(selections, null, 2));
+			const selections = await SelectionsModel.find();
 
-		if (!selections || selections.length === 0) {
-			console.log("Creating initial selections document...");
-			const newSelections = new SelectionsModel({
-				selections: [
-					{
-						weekNumber: 1,
-						meals: {},
-					},
-				],
-				totalWeeks: 1,
-				currentWeek: 0,
-			});
-			const savedSelections = await newSelections.save();
-			console.log(
-				"Created new selections document:",
-				JSON.stringify(savedSelections, null, 2)
-			);
-			return res.json([savedSelections]);
+			// Update cache
+			cache.selections = selections;
+			cache.lastUpdated = Date.now();
+
+			if (!selections || selections.length === 0) {
+				const newSelections = new SelectionsModel({
+					selections: [
+						{
+							weekNumber: 1,
+							meals: {},
+						},
+					],
+					totalWeeks: 1,
+					currentWeek: 0,
+				});
+				const savedSelections = await newSelections.save();
+				cache.selections = [savedSelections];
+				cache.lastUpdated = Date.now();
+				return res.json([savedSelections]);
+			}
+
+			res.json(selections);
+		} catch (error) {
+			console.error("Error in GET /selections:", error);
+			res.status(500).json({ error: "Failed to fetch selections" });
 		}
-
-		res.json(selections);
-	} catch (error) {
-		console.error("Error in GET /selections:", error);
-		res.status(500).json({ error: "Failed to fetch selections" });
 	}
-});
+);
 
 interface Selection {
 	weekNumber: number;

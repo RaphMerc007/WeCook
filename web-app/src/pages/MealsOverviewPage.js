@@ -27,6 +27,14 @@ export default function MealsOverviewPage(container, store) {
 			if (selectionsData && selectionsData.length > 0) {
 				const mainDocument = selectionsData[0]; // Get the first (and only) document
 				console.log("Main document:", JSON.stringify(mainDocument, null, 2));
+				console.log(
+					"Does mainDocument have selections?",
+					!!mainDocument?.selections
+				);
+				console.log(
+					"Number of selections:",
+					mainDocument?.selections?.length || 0
+				);
 
 				if (mainDocument && mainDocument.selections) {
 					console.log(
@@ -150,6 +158,7 @@ export default function MealsOverviewPage(container, store) {
 	// Load meal details for overview cards
 	function loadOverviewMeals() {
 		const mealIds = new Set();
+		console.log("Selected meals:", selectedMeals);
 		Object.values(selectedMeals).forEach((weekData) => {
 			if (weekData.meals) {
 				// Convert meals object to array of entries and filter
