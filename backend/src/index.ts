@@ -64,26 +64,49 @@ app.use((req, res, next) => {
 // MongoDB connection
 mongoose
 	.connect(mongoUri)
-	.then(() => console.log("Connected to MongoDB"))
+	.then(() => {
+		console.log("=== MongoDB Connection Debug ===");
+		console.log("Connected to MongoDB at:", mongoUri);
+		// Check if collections exist and count documents
+		Promise.all([
+			MealModel.countDocuments(),
+			SelectionsModel.countDocuments(),
+		]).then(([mealCount, selectionsCount]) => {
+			console.log("Initial database state:");
+			console.log("- Meals collection:", { count: mealCount });
+			console.log("- Selections collection:", { count: selectionsCount });
+		});
+	})
 	.catch((err: Error) => console.error("MongoDB connection error:", err));
 
 // Create Router for API routes
 const apiRouter = express.Router();
 
 // Health check endpoint
-apiRouter.get("/health", (req, res) => {
-	res.json({ status: "ok", timestamp: new Date().toISOString() });
+apiRouter.get("/health", async (req, res) => {
+	const dbState = {
+		meals: await MealModel.countDocuments(),
+		selections: await SelectionsModel.countDocuments(),
+	};
+	res.json({
+		status: "ok",
+		timestamp: new Date().toISOString(),
+		database: dbState,
+	});
 });
 
 // Mount all other API routes
 apiRouter.get("/selections", async (req: Request, res: Response) => {
 	try {
-		console.log("Fetching selections...");
+		console.log("=== GET /selections Debug ===");
+		const selectionsCount = await SelectionsModel.countDocuments();
+		console.log("Current selections count:", selectionsCount);
+
 		const selections = await SelectionsModel.find();
-		console.log("Found selections:", selections);
+		console.log("Found selections:", JSON.stringify(selections, null, 2));
 
 		if (!selections || selections.length === 0) {
-			console.log("No selections found, creating new document");
+			console.log("Creating initial selections document...");
 			const newSelections = new SelectionsModel({
 				selections: [
 					{
@@ -94,14 +117,17 @@ apiRouter.get("/selections", async (req: Request, res: Response) => {
 				totalWeeks: 1,
 				currentWeek: 0,
 			});
-			await newSelections.save();
-			console.log("Created new selections document:", newSelections);
-			return res.json([newSelections]);
+			const savedSelections = await newSelections.save();
+			console.log(
+				"Created new selections document:",
+				JSON.stringify(savedSelections, null, 2)
+			);
+			return res.json([savedSelections]);
 		}
 
 		res.json(selections);
 	} catch (error) {
-		console.error("Error fetching selections:", error);
+		console.error("Error in GET /selections:", error);
 		res.status(500).json({ error: "Failed to fetch selections" });
 	}
 });
@@ -163,45 +189,56 @@ apiRouter.post(
 		res: Response
 	) => {
 		try {
-			console.log("File upload request received");
+			console.log("=== POST /upload Debug ===");
 			if (!req.file) {
 				console.log("No file uploaded");
 				return res.status(400).json({ error: "No file uploaded" });
 			}
-			console.log("File uploaded successfully:", req.file);
+
+			console.log("File details:", {
+				filename: req.file.filename,
+				size: req.file.size,
+				path: req.file.path,
+			});
 
 			// Read and parse the JSON file
 			const fs = require("fs");
 			const fileContent = fs.readFileSync(req.file.path, "utf8");
 			const meals = JSON.parse(fileContent) as Meal[];
-			console.log("Parsed meals from file:", meals);
+			console.log(`Parsed ${meals.length} meals from file`);
+			console.log("First meal sample:", JSON.stringify(meals[0], null, 2));
 
 			// Save meals to database
-			console.log("Starting to save meals to database...");
+			console.log("Starting database import...");
+			const beforeCount = await MealModel.countDocuments();
+			console.log("Meals in database before import:", beforeCount);
+
 			const savedMeals = await Promise.all(
 				meals.map(async (meal: Meal) => {
 					try {
-						// Generate a unique ID if not present
 						const mealId = meal.id || Math.random().toString(36).substring(7);
-						console.log(`Saving meal ${mealId}:`, meal.name);
+						console.log(`Processing meal: ${meal.name} (${mealId})`);
 						const savedMeal = await MealModel.findOneAndUpdate(
 							{ id: mealId },
 							{ ...meal, id: mealId },
 							{ upsert: true, new: true }
 						);
-						console.log(`Successfully saved meal ${mealId}`);
+						console.log(
+							`Saved meal ${mealId}:`,
+							JSON.stringify(savedMeal, null, 2)
+						);
 						return savedMeal;
 					} catch (error) {
-						console.error(`Error saving meal ${meal.name}:`, error);
+						console.error(`Failed to save meal ${meal.name}:`, error);
 						throw error;
 					}
 				})
 			);
-			console.log("All meals saved to database:", savedMeals);
 
-			// Verify the meals were saved
-			const count = await MealModel.countDocuments();
-			console.log(`Total meals in database: ${count}`);
+			const afterCount = await MealModel.countDocuments();
+			console.log("Database import complete");
+			console.log("Meals in database after import:", afterCount);
+			console.log("New meals added:", afterCount - beforeCount);
 
 			res.json({
 				message: "File uploaded and processed successfully",
@@ -209,9 +246,14 @@ apiRouter.post(
 				path: req.file.path,
 				mealsCount: meals.length,
 				savedCount: savedMeals.length,
+				databaseStats: {
+					beforeCount,
+					afterCount,
+					newMeals: afterCount - beforeCount,
+				},
 			});
 		} catch (error) {
-			console.error("Error processing file:", error);
+			console.error("Error in POST /upload:", error);
 			res.status(500).json({ error: "Failed to process file" });
 		}
 	}
