@@ -14,42 +14,55 @@ export default function ClientMealsPage(container, store, router) {
 	async function loadData() {
 		try {
 			console.log("Loading data...");
-
-			// Fetch selections first
 			console.log("Fetching selections...");
-			const selectionsResponse = await fetch(`${API_BASE_URL}/api/selections`);
-			const selectionsData = await selectionsResponse.json();
+			const response = await fetch(`${API_BASE_URL}/selections`);
+			const data = await response.json();
+			console.log("Raw selections data:", data);
+
+			// Get the main document (first one)
+			const mainDocument = data[0];
+			console.log("Main document:", mainDocument);
 			console.log(
-				"Raw selections data:",
-				JSON.stringify(selectionsData, null, 2)
+				"Does mainDocument have selections?",
+				!!mainDocument?.selections
+			);
+			console.log(
+				"Number of selections:",
+				mainDocument?.selections?.length || 0
 			);
 
-			// Get the first document from the selections array
-			const mainDocument =
-				selectionsData && selectionsData.length > 0 ? selectionsData[0] : null;
-			console.log("Main document:", JSON.stringify(mainDocument, null, 2));
-
-			// Get client's selected meals
-			const client = store.state.clients.find((c) => c.id === clientId);
-			const clientSelections = client?.selectedMeals || [];
+			// Get client's selections
+			const clientResponse = await fetch(
+				`${API_BASE_URL}/clients/${clientId}/selections`
+			);
+			const clientSelections = await clientResponse.json();
 			console.log("Client selections:", clientSelections);
 
-			// Get unique dates from client selections
-			const dates = clientSelections
-				.map((selection) => selection.date)
-				.filter((date, index, self) => self.indexOf(date) === index)
-				.sort();
-
+			// Process dates from client selections
+			const dates = [...new Set(clientSelections.map((s) => s.date))];
 			console.log("Processed dates:", dates);
 
-			// If we have dates but no selected date, select the first one
-			if (dates.length > 0 && !selectedDate) {
-				selectedDate = dates[0];
-				loadDateMeals();
-			}
+			// Get all meals from store
+			const allMeals = store.state.meals || [];
+			console.log("All meals from store:", allMeals);
 
-			// Store selections data for date lookup
-			store.setState({ selections: mainDocument?.selections || [] });
+			// Get selections for the selected date
+			const dateSelections = clientSelections.filter(
+				(s) => s.date === selectedDate
+			);
+			console.log("Date selections:", dateSelections);
+
+			// Set meals for the selected date
+			weekMeals = allMeals.map((meal) => {
+				const selection = dateSelections.find((s) => s.mealId === meal.id);
+				return {
+					...meal,
+					quantity: selection ? selection.quantity : 0,
+				};
+			});
+			console.log("Setting date meals:", weekMeals);
+
+			render();
 		} catch (error) {
 			console.error("Error loading data:", error);
 		}
@@ -150,111 +163,65 @@ export default function ClientMealsPage(container, store, router) {
 	}
 
 	async function handleQuantityChange(mealId, date, change) {
-		console.log("handleQuantityChange called with:", {
-			mealId,
-			date,
-			change,
-		});
-		const client = store.state.clients.find((c) => c.id === clientId);
-		console.log("Found client:", client);
-
-		if (!client) {
-			console.error("Client not found!");
-			return;
-		}
-
-		const selectedMeals = client.selectedMeals || [];
-		console.log("Current selectedMeals:", selectedMeals);
-
-		// Get all selections for this date
-		const dateSelections = selectedMeals.filter((m) => m.date === date);
-		const currentDateTotal = dateSelections.reduce(
-			(sum, m) => sum + m.quantity,
-			0
-		);
-
-		const existingSelection = selectedMeals.find(
-			(m) => m.mealId === mealId && m.date === date
-		);
-		console.log("Existing selection:", existingSelection);
-
-		// Calculate new quantity
-		const newQuantity = Math.max(
-			0,
-			(existingSelection?.quantity || 0) + change
-		);
-
-		// Check if this would exceed the weekly limit
-		const otherMealsTotal =
-			currentDateTotal - (existingSelection?.quantity || 0);
-		if (newQuantity + otherMealsTotal > client.mealsPerWeek) {
-			alert(`Cannot select more than ${client.mealsPerWeek} meals per week`);
-			return;
-		}
-
-		console.log("New quantity:", newQuantity);
-
-		let updatedSelectedMeals;
-		if (newQuantity === 0 && existingSelection) {
-			console.log("Removing selection");
-			updatedSelectedMeals = selectedMeals.filter(
-				(m) => !(m.mealId === mealId && m.date === date)
-			);
-		} else if (existingSelection) {
-			console.log("Updating existing selection");
-			updatedSelectedMeals = selectedMeals.map((m) =>
-				m.mealId === mealId && m.date === date
-					? { ...m, quantity: newQuantity }
-					: m
-			);
-		} else if (newQuantity > 0) {
-			console.log("Adding new selection");
-			updatedSelectedMeals = [
-				...selectedMeals,
-				{ mealId, quantity: newQuantity, date },
-			];
-		} else {
-			return; // No change needed
-		}
-
 		try {
-			// Update the client's selections in the database
+			console.log("handleQuantityChange called with:", {
+				mealId,
+				date,
+				change,
+			});
+			const client = store.state.clients.find((c) => c.id === clientId);
+			console.log("Found client:", client);
+
+			if (!client) {
+				throw new Error("Client not found");
+			}
+
+			// Get current selections
 			const response = await fetch(
-				`${API_BASE_URL}/api/clients/${clientId}/selections`,
-				{
+				`${API_BASE_URL}/clients/${clientId}/selections`
+			);
+			const selections = await response.json();
+			console.log("Current selectedMeals:", selections);
+
+			// Find existing selection for this meal and date
+			const existingSelection = selections.find(
+				(s) => s.mealId === mealId && s.date === date
+			);
+			console.log("Existing selection:", existingSelection);
+
+			let newQuantity = (existingSelection?.quantity || 0) + change;
+			console.log("New quantity:", newQuantity);
+
+			if (newQuantity <= 0) {
+				console.log("Removing selection");
+				// Remove the selection
+				await fetch(`${API_BASE_URL}/clients/${clientId}/selections`, {
+					method: "DELETE",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						mealId,
+						date,
+					}),
+				});
+			} else {
+				// Update or create selection
+				await fetch(`${API_BASE_URL}/clients/${clientId}/selections`, {
 					method: "PUT",
 					headers: {
 						"Content-Type": "application/json",
 					},
 					body: JSON.stringify({
-						selectedMeals: updatedSelectedMeals,
+						mealId,
+						date,
+						quantity: newQuantity,
 					}),
-				}
-			);
-
-			if (!response.ok) {
-				throw new Error("Failed to update client selections");
+				});
 			}
 
-			// Update the store
-			store.setState({
-				clients: store.state.clients.map((c) =>
-					c.id === clientId
-						? {
-								...c,
-								selectedMeals: updatedSelectedMeals,
-						  }
-						: c
-				),
-			});
-
-			// Update the weekMeals array
-			weekMeals = weekMeals.map((meal) =>
-				meal.id === mealId ? { ...meal, quantity: newQuantity } : meal
-			);
-
-			// Force re-render to update the UI
-			render();
+			// Reload data to reflect changes
+			loadData();
 		} catch (error) {
 			console.error("Error updating client selections:", error);
 			alert("Failed to update selections. Please try again.");
