@@ -7,7 +7,7 @@
 	"scripts": {
 		"start": "node dist/index.js",
 		"dev": "ts-node-dev --esm --respawn --transpile-only src/index.ts",
-		"build": "tsc"
+		"build": "yarn tsc"
 	},
 	"dependencies": {
 		"@types/mongoose": "^5.11.96",
