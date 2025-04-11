@@ -364,6 +364,11 @@ apiRouter.post("/meals/clear", async (req, res) => {
 // Mount the API router
 app.use("/api", apiRouter);
 
+// Root route
+app.get("/", (req, res) => {
+	res.json({ message: "WeCook API is running", version: "1.0.0" });
+});
+
 // Serve uploaded files
 app.use("/uploads", express.static(uploadsDir));
 
