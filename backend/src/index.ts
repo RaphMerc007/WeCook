@@ -27,6 +27,7 @@ app.use(
 		origin: ["https://wecookselection.netlify.app", "http://localhost:5173"],
 		methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 		allowedHeaders: ["Content-Type", "Authorization"],
+		credentials: true,
 	})
 );
 
@@ -53,13 +54,19 @@ const upload = multer({ storage: storage });
 // Middleware
 app.use(express.json());
 
+// Debug middleware - log all requests
+app.use((req, res, next) => {
+	console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+	console.log("Headers:", req.headers);
+	next();
+});
+
 // Serve uploaded files
 app.use("/uploads", express.static(uploadsDir));
 
-// Logging middleware
-app.use((req, res, next) => {
-	console.log(`${req.method} ${req.url}`);
-	next();
+// API Routes
+app.get("/api/health", (req, res) => {
+	res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 // MongoDB connection
@@ -354,21 +361,32 @@ app.post("/api/meals/clear", async (req, res) => {
 	}
 });
 
-// Error handling middleware
-app.use(
-	(
-		err: any,
-		req: express.Request,
-		res: express.Response,
-		next: express.NextFunction
-	) => {
-		console.error("Unhandled error:", err);
-		res.status(500).json({ error: "Internal server error" });
-	}
-);
+// 404 handler for API routes
+app.use("/api/*", (req, res) => {
+	console.log(`404 Not Found: ${req.method} ${req.url}`);
+	res.status(404).json({ error: "API endpoint not found" });
+});
+
+// Generic 404 handler
+app.use((req, res) => {
+	console.log(`404 Not Found: ${req.method} ${req.url}`);
+	res.status(404).json({ error: "Not found" });
+});
+
+// Error handler
+app.use((err: any, req: Request, res: Response, next: any) => {
+	console.error("Unhandled error:", err);
+	res
+		.status(500)
+		.json({ error: "Internal server error", message: err.message });
+});
 
 app.listen(port, () => {
 	console.log(`Server running on port ${port}`);
+	console.log(`CORS configured for:`, [
+		"https://wecookselection.netlify.app",
+		"http://localhost:5173",
+	]);
 });
 
 export default app;
