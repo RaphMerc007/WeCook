@@ -3,8 +3,11 @@ console.log("VITE_API_URL:", import.meta.env.VITE_API_URL);
 
 // In development, use the proxy
 // In production, use the environment variable
+const apiUrl = import.meta.env.VITE_API_URL;
 export const API_BASE_URL = import.meta.env.PROD
-	? import.meta.env.VITE_API_URL
+	? apiUrl.startsWith("http")
+		? apiUrl
+		: `https://${apiUrl}`
 	: "/api";
 
 if (import.meta.env.PROD && !API_BASE_URL.startsWith("http")) {
