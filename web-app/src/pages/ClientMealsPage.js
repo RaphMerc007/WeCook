@@ -129,9 +129,14 @@ export default function ClientMealsPage(container, store, router) {
 
 		isLoading = true;
 		try {
+			// Format the date to match the API's expected format
+			const formattedDate = new Date(
+				selectedDate + "T00:00:00.000Z"
+			).toISOString();
+
 			// Fetch meals for the selected date
 			const mealsResponse = await fetch(
-				`${API_BASE_URL}/meals?date=${selectedDate}`
+				`${API_BASE_URL}/meals?date=${formattedDate}`
 			);
 			const mealsData = await mealsResponse.json();
 
