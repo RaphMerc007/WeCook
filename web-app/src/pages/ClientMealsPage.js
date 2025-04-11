@@ -181,7 +181,7 @@ export default function ClientMealsPage(container, store, router) {
 		}
 	}
 
-	function handleQuantityChange(mealId, date, change) {
+	async function handleQuantityChange(mealId, date, change) {
 		console.log("handleQuantityChange called with:", {
 			mealId,
 			date,
@@ -249,25 +249,48 @@ export default function ClientMealsPage(container, store, router) {
 			return; // No change needed
 		}
 
-		// Update the store
-		store.setState({
-			clients: store.state.clients.map((c) =>
-				c.id === clientId
-					? {
-							...c,
-							selectedMeals: updatedSelectedMeals,
-					  }
-					: c
-			),
-		});
+		try {
+			// Update the client's selections in the database
+			const response = await fetch(
+				`${API_BASE_URL}/clients/${clientId}/selections`,
+				{
+					method: "PUT",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						selectedMeals: updatedSelectedMeals,
+					}),
+				}
+			);
 
-		// Update the weekMeals array
-		weekMeals = weekMeals.map((meal) =>
-			meal.id === mealId ? { ...meal, quantity: newQuantity } : meal
-		);
+			if (!response.ok) {
+				throw new Error("Failed to update client selections");
+			}
 
-		// Force re-render to update the UI
-		render();
+			// Update the store
+			store.setState({
+				clients: store.state.clients.map((c) =>
+					c.id === clientId
+						? {
+								...c,
+								selectedMeals: updatedSelectedMeals,
+						  }
+						: c
+				),
+			});
+
+			// Update the weekMeals array
+			weekMeals = weekMeals.map((meal) =>
+				meal.id === mealId ? { ...meal, quantity: newQuantity } : meal
+			);
+
+			// Force re-render to update the UI
+			render();
+		} catch (error) {
+			console.error("Error updating client selections:", error);
+			alert("Failed to update selections. Please try again.");
+		}
 	}
 
 	function formatImageUrl(imageUrl) {

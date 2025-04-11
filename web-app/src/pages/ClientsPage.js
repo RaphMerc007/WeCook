@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "../config";
+
 export default function ClientsPage(container, store, router) {
 	let isModalOpen = false;
 	let editingClient = null;
@@ -13,7 +15,7 @@ export default function ClientsPage(container, store, router) {
 		return errors;
 	}
 
-	function handleSubmit(event) {
+	async function handleSubmit(event) {
 		event.preventDefault();
 		const formData = new FormData(event.target);
 		const values = {
@@ -34,24 +36,53 @@ export default function ClientsPage(container, store, router) {
 			return;
 		}
 
-		if (editingClient) {
-			store.setState({
-				clients: store.state.clients.map((client) =>
-					client.id === editingClient ? { ...client, ...values } : client
-				),
-			});
-		} else {
-			store.setState({
-				clients: [
-					...store.state.clients,
+		try {
+			if (editingClient) {
+				// Update existing client
+				const response = await fetch(
+					`${API_BASE_URL}/clients/${editingClient}`,
 					{
-						id: Date.now().toString(),
-						...values,
+						method: "PUT",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify(values),
+					}
+				);
+
+				if (!response.ok) {
+					throw new Error("Failed to update client");
+				}
+
+				store.setState({
+					clients: store.state.clients.map((client) =>
+						client.id === editingClient ? { ...client, ...values } : client
+					),
+				});
+			} else {
+				// Create new client
+				const response = await fetch(`${API_BASE_URL}/clients`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
 					},
-				],
-			});
+					body: JSON.stringify(values),
+				});
+
+				if (!response.ok) {
+					throw new Error("Failed to create client");
+				}
+
+				const newClient = await response.json();
+				store.setState({
+					clients: [...store.state.clients, newClient],
+				});
+			}
+			closeModal();
+		} catch (error) {
+			console.error("Error saving client:", error);
+			alert("Failed to save client. Please try again.");
 		}
-		closeModal();
 	}
 
 	function openEditModal(clientId) {
@@ -82,10 +113,23 @@ export default function ClientsPage(container, store, router) {
 		render();
 	}
 
-	function removeClient(clientId) {
-		store.setState({
-			clients: store.state.clients.filter((client) => client.id !== clientId),
-		});
+	async function removeClient(clientId) {
+		try {
+			const response = await fetch(`${API_BASE_URL}/clients/${clientId}`, {
+				method: "DELETE",
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to delete client");
+			}
+
+			store.setState({
+				clients: store.state.clients.filter((client) => client.id !== clientId),
+			});
+		} catch (error) {
+			console.error("Error deleting client:", error);
+			alert("Failed to delete client. Please try again.");
+		}
 	}
 
 	function render() {

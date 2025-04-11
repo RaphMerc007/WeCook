@@ -264,79 +264,6 @@ export default function MealsOverviewPage(container, store) {
 		saveData();
 	}
 
-	function handleClientQuantityChange(mealId, weekNumber, clientId, change) {
-		const weekKey = `week${weekNumber}`;
-		const weekData = selectedMeals[weekKey] || {};
-		const clientSelections = weekData.clientSelections || {};
-		const clientData = clientSelections[clientId] || { selectedMeals: {} };
-		const currentQuantity = clientData.selectedMeals[mealId] || 0;
-		const newQuantity = Math.max(0, currentQuantity + change);
-
-		selectedMeals = {
-			...selectedMeals,
-			[weekKey]: {
-				...weekData,
-				clientSelections: {
-					...clientSelections,
-					[clientId]: {
-						...clientData,
-						selectedMeals: {
-							...clientData.selectedMeals,
-							[mealId]: newQuantity,
-						},
-					},
-				},
-			},
-		};
-
-		render();
-		saveData();
-	}
-
-	function addClient(weekNumber) {
-		const weekKey = `week${weekNumber}`;
-		const weekData = selectedMeals[weekKey] || {};
-		const clientSelections = weekData.clientSelections || {};
-		const newClientId = `client-${Date.now()}`;
-		const newClientName = `Client ${Object.keys(clientSelections).length + 1}`;
-
-		selectedMeals = {
-			...selectedMeals,
-			[weekKey]: {
-				...weekData,
-				clientSelections: {
-					...clientSelections,
-					[newClientId]: {
-						clientId: newClientId,
-						clientName: newClientName,
-						selectedMeals: {},
-					},
-				},
-			},
-		};
-
-		render();
-		saveData();
-	}
-
-	function removeClient(weekNumber, clientId) {
-		const weekKey = `week${weekNumber}`;
-		const weekData = selectedMeals[weekKey] || {};
-		const clientSelections = { ...weekData.clientSelections };
-		delete clientSelections[clientId];
-
-		selectedMeals = {
-			...selectedMeals,
-			[weekKey]: {
-				...weekData,
-				clientSelections,
-			},
-		};
-
-		render();
-		saveData();
-	}
-
 	function handleAddWeek() {
 		console.log("Adding new week...");
 		console.log("Current totalWeeks:", totalWeeks);
@@ -388,14 +315,7 @@ export default function MealsOverviewPage(container, store) {
 
 	async function clearAllSelections() {
 		try {
-			console.log("Clearing all selections and meals...");
-
-			// Clear all client selections
-			const updatedClients = store.state.clients.map((client) => ({
-				...client,
-				selectedMeals: [],
-			}));
-			store.setState({ clients: updatedClients });
+			console.log("Clearing all selections...");
 
 			// Reset selections in the backend
 			await fetch(`${API_BASE_URL}/selections`, {
@@ -414,24 +334,15 @@ export default function MealsOverviewPage(container, store) {
 				}),
 			});
 
-			// Clear all meals from the database
-			await fetch(`${API_BASE_URL}/meals/clear`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-			});
-
 			// Reset local state
 			selectedMeals = {};
 			totalWeeks = 1;
 			selectedWeek = null;
-			store.setState({ meals: [] });
 
-			console.log("All selections and meals cleared successfully");
+			console.log("All selections cleared successfully");
 			render();
 		} catch (error) {
-			console.error("Failed to clear selections and meals:", error);
+			console.error("Failed to clear selections:", error);
 		}
 	}
 
@@ -480,7 +391,6 @@ export default function MealsOverviewPage(container, store) {
               ${(() => {
 								const weekKey = `week${selectedWeek + 1}`;
 								const weekData = selectedMeals[weekKey];
-								const clientSelections = weekData?.clientSelections || {};
 								const selectedMealIds = weekData
 									? Object.keys(weekData.meals)
 									: [];
@@ -490,59 +400,14 @@ export default function MealsOverviewPage(container, store) {
 										const meal = store.state.meals.find((m) => m.id === mealId);
 										if (!meal) return null;
 
-										// Calculate total quantity from all clients' selections for this meal
-										const totalQuantity = Object.values(
-											clientSelections
-										).reduce((total, client) => {
-											return total + (client.selectedMeals[mealId] || 0);
-										}, 0);
-
 										return {
 											...meal,
-											totalQuantity,
-											clientQuantities: Object.entries(clientSelections).map(
-												([clientId, clientData]) => ({
-													clientId,
-													clientName: clientData.clientName,
-													quantity: clientData.selectedMeals[mealId] || 0,
-												})
-											),
+											quantity: weekData.meals[mealId] || 0,
 										};
 									})
-									.filter((meal) => meal && meal.totalQuantity > 0);
+									.filter((meal) => meal && meal.quantity > 0);
 
 								return `
-                <div class="group">
-                  <h3>Clients</h3>
-                  <button class="button" onclick="window.addClient(${
-										selectedWeek + 1
-									})">
-                    Add Client
-                  </button>
-                  <div class="client-list">
-                    ${Object.entries(clientSelections)
-											.map(
-												([clientId, clientData]) => `
-                      <div class="client-item">
-                        <input type="text" 
-                               value="${clientData.clientName}" 
-                               onchange="window.updateClientName(${
-																	selectedWeek + 1
-																}, '${clientId}', this.value)"
-                               class="input" />
-                        <button class="button button-danger" 
-                                onclick="window.removeClient(${
-																	selectedWeek + 1
-																}, '${clientId}')">
-                          Remove
-                        </button>
-                      </div>
-                    `
-											)
-											.join("")}
-                  </div>
-                </div>
-
                 <div class="meal-list">
                   ${
 										selectedMealsWithDetails.length > 0
@@ -559,30 +424,14 @@ export default function MealsOverviewPage(container, store) {
                       <div>
                         <h3>${meal.name}</h3>
                         <p>${meal.category}</p>
-                        <div class="client-quantities">
-                          ${meal.clientQuantities
-														.map(
-															(client) => `
-                            <div class="client-quantity">
-                              <span>${client.clientName}:</span>
-                              <button onclick="window.handleClientQuantityChange('${
-																meal.id
-															}', ${selectedWeek + 1}, '${
-																client.clientId
-															}', -1)">-</button>
-                              <span>${client.quantity}</span>
-                              <button onclick="window.handleClientQuantityChange('${
-																meal.id
-															}', ${selectedWeek + 1}, '${
-																client.clientId
-															}', 1)">+</button>
-                            </div>
-                          `
-														)
-														.join("")}
-                        </div>
-                        <div class="total-quantity">
-                          Total: ${meal.totalQuantity}
+                        <div class="quantity-control">
+                          <button onclick="window.handleQuantityChange('${
+														meal.id
+													}', ${selectedWeek + 1}, -1)">-</button>
+                          <span>${meal.quantity}</span>
+                          <button onclick="window.handleQuantityChange('${
+														meal.id
+													}', ${selectedWeek + 1}, 1)">+</button>
                         </div>
                       </div>
                     </div>
@@ -609,25 +458,6 @@ export default function MealsOverviewPage(container, store) {
 		};
 		window.clearAllSelections = clearAllSelections;
 		window.handleQuantityChange = handleQuantityChange;
-		window.handleClientQuantityChange = handleClientQuantityChange;
-		window.addClient = addClient;
-		window.removeClient = removeClient;
-		window.updateClientName = (weekNumber, clientId, newName) => {
-			const weekKey = `week${weekNumber}`;
-			const weekData = selectedMeals[weekKey] || {};
-			const clientSelections = { ...weekData.clientSelections };
-			if (clientSelections[clientId]) {
-				clientSelections[clientId].clientName = newName;
-				selectedMeals = {
-					...selectedMeals,
-					[weekKey]: {
-						...weekData,
-						clientSelections,
-					},
-				};
-				saveData();
-			}
-		};
 	}
 
 	// Initial load
