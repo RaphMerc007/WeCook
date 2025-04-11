@@ -218,14 +218,19 @@ apiRouter.post("/selections", async (req: Request, res: Response) => {
 
 		// Process selections and ensure meals is a valid object
 		const processedSelections = selections.map((selection: Selection) => {
-			// Clean up meals object to remove invalid entries
+			// Clean up the meals object to remove any undefined keys
 			const cleanedMeals: Record<string, boolean> = {};
 			if (selection.meals) {
 				Object.entries(selection.meals).forEach(([mealId, value]) => {
-					// Only include valid meal IDs that are not undefined and not the string "undefined"
-					if (mealId && mealId !== "undefined" && typeof mealId === "string") {
-						cleanedMeals[mealId] = value;
-					}
+					// Generate a unique ID if the meal doesn't have one
+					const finalMealId =
+						mealId && mealId !== "undefined" && typeof mealId === "string"
+							? mealId
+							: `generated-${Date.now()}-${Math.random()
+									.toString(36)
+									.substr(2, 9)}`;
+
+					cleanedMeals[finalMealId] = value;
 				});
 			}
 

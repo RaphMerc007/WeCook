@@ -173,6 +173,18 @@ document.addEventListener("DOMContentLoaded", function () {
 	importButton.addEventListener("click", async () => {
 		console.log("[Popup] Import button clicked");
 		try {
+			// Generate unique IDs for meals that don't have them
+			const mealsWithIds = extractedMeals.map((meal) => ({
+				...meal,
+				id:
+					meal.id ||
+					`${meal.name
+						.toLowerCase()
+						.replace(/\s+/g, "-")}-${Date.now()}-${Math.random()
+						.toString(36)
+						.substr(2, 9)}`,
+			}));
+
 			const response = await fetch(
 				"https://wecook-production.up.railway.app/api/selections",
 				{
@@ -188,7 +200,7 @@ document.addEventListener("DOMContentLoaded", function () {
 						selections: [
 							{
 								weekNumber: 1,
-								meals: extractedMeals.reduce((acc, meal) => {
+								meals: mealsWithIds.reduce((acc, meal) => {
 									if (meal.id && typeof meal.id === "string") {
 										acc[meal.id] = true;
 									}
