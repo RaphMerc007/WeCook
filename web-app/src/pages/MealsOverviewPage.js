@@ -264,6 +264,79 @@ export default function MealsOverviewPage(container, store) {
 		saveData();
 	}
 
+	function handleClientQuantityChange(mealId, weekNumber, clientId, change) {
+		const weekKey = `week${weekNumber}`;
+		const weekData = selectedMeals[weekKey] || {};
+		const clientSelections = weekData.clientSelections || {};
+		const clientData = clientSelections[clientId] || { selectedMeals: {} };
+		const currentQuantity = clientData.selectedMeals[mealId] || 0;
+		const newQuantity = Math.max(0, currentQuantity + change);
+
+		selectedMeals = {
+			...selectedMeals,
+			[weekKey]: {
+				...weekData,
+				clientSelections: {
+					...clientSelections,
+					[clientId]: {
+						...clientData,
+						selectedMeals: {
+							...clientData.selectedMeals,
+							[mealId]: newQuantity,
+						},
+					},
+				},
+			},
+		};
+
+		render();
+		saveData();
+	}
+
+	function addClient(weekNumber) {
+		const weekKey = `week${weekNumber}`;
+		const weekData = selectedMeals[weekKey] || {};
+		const clientSelections = weekData.clientSelections || {};
+		const newClientId = `client-${Date.now()}`;
+		const newClientName = `Client ${Object.keys(clientSelections).length + 1}`;
+
+		selectedMeals = {
+			...selectedMeals,
+			[weekKey]: {
+				...weekData,
+				clientSelections: {
+					...clientSelections,
+					[newClientId]: {
+						clientId: newClientId,
+						clientName: newClientName,
+						selectedMeals: {},
+					},
+				},
+			},
+		};
+
+		render();
+		saveData();
+	}
+
+	function removeClient(weekNumber, clientId) {
+		const weekKey = `week${weekNumber}`;
+		const weekData = selectedMeals[weekKey] || {};
+		const clientSelections = { ...weekData.clientSelections };
+		delete clientSelections[clientId];
+
+		selectedMeals = {
+			...selectedMeals,
+			[weekKey]: {
+				...weekData,
+				clientSelections,
+			},
+		};
+
+		render();
+		saveData();
+	}
+
 	function handleAddWeek() {
 		console.log("Adding new week...");
 		console.log("Current totalWeeks:", totalWeeks);
@@ -407,6 +480,7 @@ export default function MealsOverviewPage(container, store) {
               ${(() => {
 								const weekKey = `week${selectedWeek + 1}`;
 								const weekData = selectedMeals[weekKey];
+								const clientSelections = weekData?.clientSelections || {};
 								const selectedMealIds = weekData
 									? Object.keys(weekData.meals)
 									: [];
@@ -416,61 +490,109 @@ export default function MealsOverviewPage(container, store) {
 										const meal = store.state.meals.find((m) => m.id === mealId);
 										if (!meal) return null;
 
-										// Calculate total quantity from all clients' selections for this meal and date
-										const weekDate = weekData.date;
-										const totalQuantity = (store.state.clients || []).reduce(
-											(total, client) => {
-												const clientMeals = client.selectedMeals || [];
-												const dateSelections = clientMeals.filter(
-													(m) =>
-														m.mealId === mealId &&
-														new Date(m.date).toISOString().split("T")[0] ===
-															new Date(weekDate).toISOString().split("T")[0]
-												);
-												return (
-													total +
-													dateSelections.reduce(
-														(sum, m) => sum + (m.quantity || 0),
-														0
-													)
-												);
-											},
-											0
-										);
+										// Calculate total quantity from all clients' selections for this meal
+										const totalQuantity = Object.values(
+											clientSelections
+										).reduce((total, client) => {
+											return total + (client.selectedMeals[mealId] || 0);
+										}, 0);
 
 										return {
 											...meal,
 											totalQuantity,
+											clientQuantities: Object.entries(clientSelections).map(
+												([clientId, clientData]) => ({
+													clientId,
+													clientName: clientData.clientName,
+													quantity: clientData.selectedMeals[mealId] || 0,
+												})
+											),
 										};
 									})
 									.filter((meal) => meal && meal.totalQuantity > 0);
 
-								return selectedMealsWithDetails.length > 0
-									? selectedMealsWithDetails
+								return `
+                <div class="group">
+                  <h3>Clients</h3>
+                  <button class="button" onclick="window.addClient(${
+										selectedWeek + 1
+									})">
+                    Add Client
+                  </button>
+                  <div class="client-list">
+                    ${Object.entries(clientSelections)
 											.map(
-												(meal) => `
-                    <div class="meal-list-item" style="display: flex; align-items: center; gap: 1rem; padding: 1rem; border: 1px solid #888; border-radius: 8px;">
+												([clientId, clientData]) => `
+                      <div class="client-item">
+                        <input type="text" 
+                               value="${clientData.clientName}" 
+                               onchange="window.updateClientName(${
+																	selectedWeek + 1
+																}, '${clientId}', this.value)"
+                               class="input" />
+                        <button class="button button-danger" 
+                                onclick="window.removeClient(${
+																	selectedWeek + 1
+																}, '${clientId}')">
+                          Remove
+                        </button>
+                      </div>
+                    `
+											)
+											.join("")}
+                  </div>
+                </div>
+
+                <div class="meal-list">
+                  ${
+										selectedMealsWithDetails.length > 0
+											? selectedMealsWithDetails
+													.map(
+														(meal) => `
+                    <div class="meal-list-item">
                       <img src="${
 												meal.imageUrl.startsWith("http")
 													? meal.imageUrl
 													: `https://cdn.wecookmeals.ca/uploads/${meal.imageUrl}`
 											}" 
-                           alt="${meal.name}" 
-                           style="width: 80px; height: 80px; object-fit: cover; border-radius: 4px;" />
-                      <div style="flex: 1;">
-                        <h3 style="margin: 0;">${meal.name}</h3>
-                        <p style="margin: 0.5rem 0; color: #aaa;">${
-													meal.category
-												}</p>
-                      </div>
-                      <div style="margin-left: auto; font-weight: 500;">
-                        Total Selected: ${meal.totalQuantity}
+                           alt="${meal.name}" />
+                      <div>
+                        <h3>${meal.name}</h3>
+                        <p>${meal.category}</p>
+                        <div class="client-quantities">
+                          ${meal.clientQuantities
+														.map(
+															(client) => `
+                            <div class="client-quantity">
+                              <span>${client.clientName}:</span>
+                              <button onclick="window.handleClientQuantityChange('${
+																meal.id
+															}', ${selectedWeek + 1}, '${
+																client.clientId
+															}', -1)">-</button>
+                              <span>${client.quantity}</span>
+                              <button onclick="window.handleClientQuantityChange('${
+																meal.id
+															}', ${selectedWeek + 1}, '${
+																client.clientId
+															}', 1)">+</button>
+                            </div>
+                          `
+														)
+														.join("")}
+                        </div>
+                        <div class="total-quantity">
+                          Total: ${meal.totalQuantity}
+                        </div>
                       </div>
                     </div>
                   `
-											)
-											.join("")
-									: "<p>No meals selected for this week</p>";
+													)
+													.join("")
+											: "<p>No meals selected for this week</p>"
+									}
+                </div>
+              `;
 							})()}
             </div>
           `
@@ -486,6 +608,26 @@ export default function MealsOverviewPage(container, store) {
 			render();
 		};
 		window.clearAllSelections = clearAllSelections;
+		window.handleQuantityChange = handleQuantityChange;
+		window.handleClientQuantityChange = handleClientQuantityChange;
+		window.addClient = addClient;
+		window.removeClient = removeClient;
+		window.updateClientName = (weekNumber, clientId, newName) => {
+			const weekKey = `week${weekNumber}`;
+			const weekData = selectedMeals[weekKey] || {};
+			const clientSelections = { ...weekData.clientSelections };
+			if (clientSelections[clientId]) {
+				clientSelections[clientId].clientName = newName;
+				selectedMeals = {
+					...selectedMeals,
+					[weekKey]: {
+						...weekData,
+						clientSelections,
+					},
+				};
+				saveData();
+			}
+		};
 	}
 
 	// Initial load

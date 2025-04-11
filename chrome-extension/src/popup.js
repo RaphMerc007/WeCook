@@ -185,6 +185,18 @@ document.addEventListener("DOMContentLoaded", function () {
 						.substr(2, 9)}`,
 			}));
 
+			// Create a default client selection
+			const defaultClient = {
+				id: "default-client",
+				name: "Default Client",
+				selectedMeals: mealsWithIds.reduce((acc, meal) => {
+					if (meal.id && typeof meal.id === "string") {
+						acc[meal.id] = 0; // Set default quantity to 0 for each meal
+					}
+					return acc;
+				}, {}),
+			};
+
 			const response = await fetch(
 				"https://wecook-production.up.railway.app/api/selections",
 				{
@@ -202,11 +214,18 @@ document.addEventListener("DOMContentLoaded", function () {
 								weekNumber: 1,
 								meals: mealsWithIds.reduce((acc, meal) => {
 									if (meal.id && typeof meal.id === "string") {
-										acc[meal.id] = true;
+										acc[meal.id] = 0; // Set default quantity to 0 for each meal
 									}
 									return acc;
 								}, {}),
 								date: extractedDate,
+								clientSelections: {
+									[defaultClient.id]: {
+										clientId: defaultClient.id,
+										clientName: defaultClient.name,
+										selectedMeals: defaultClient.selectedMeals,
+									},
+								},
 							},
 						],
 					}),

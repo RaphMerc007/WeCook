@@ -158,37 +158,27 @@ apiRouter.get(
 	throttleMiddleware,
 	async (req: Request, res: Response) => {
 		try {
-			// Check cache first
-			if (cache.selections && Date.now() - cache.lastUpdated < CACHE_DURATION) {
-				return res.json(cache.selections);
-			}
-
-			const selections = await SelectionsModel.find();
-
-			// Update cache
-			cache.selections = selections;
-			cache.lastUpdated = Date.now();
-
-			if (!selections || selections.length === 0) {
-				const newSelections = new SelectionsModel({
+			const result = await SelectionsModel.findOne({});
+			if (!result) {
+				// If no selections exist, create a default one
+				const defaultSelections = new SelectionsModel({
+					totalWeeks: 1,
+					currentWeek: 0,
 					selections: [
 						{
 							weekNumber: 1,
 							meals: {},
+							clientSelections: {},
 						},
 					],
-					totalWeeks: 1,
-					currentWeek: 0,
 				});
-				const savedSelections = await newSelections.save();
-				cache.selections = [savedSelections];
-				cache.lastUpdated = Date.now();
-				return res.json([savedSelections]);
+				await defaultSelections.save();
+				res.json([defaultSelections]);
+			} else {
+				res.json([result]);
 			}
-
-			res.json(selections);
 		} catch (error) {
-			console.error("Error in GET /selections:", error);
+			console.error("Error fetching selections:", error);
 			res.status(500).json({ error: "Failed to fetch selections" });
 		}
 	}
@@ -196,8 +186,16 @@ apiRouter.get(
 
 interface Selection {
 	weekNumber: number;
-	meals: Record<string, boolean>;
+	meals: Record<string, number>;
 	date?: string;
+	clientSelections?: Record<
+		string,
+		{
+			clientId: string;
+			clientName: string;
+			selectedMeals: Record<string, number>;
+		}
+	>;
 }
 
 interface Meal {
@@ -219,7 +217,7 @@ apiRouter.post("/selections", async (req: Request, res: Response) => {
 		// Process selections and ensure meals is a valid object
 		const processedSelections = selections.map((selection: Selection) => {
 			// Clean up the meals object to remove any undefined keys
-			const cleanedMeals: Record<string, boolean> = {};
+			const cleanedMeals: Record<string, number> = {};
 			if (selection.meals) {
 				Object.entries(selection.meals).forEach(([mealId, value]) => {
 					// Generate a unique ID if the meal doesn't have one
@@ -230,17 +228,54 @@ apiRouter.post("/selections", async (req: Request, res: Response) => {
 									.toString(36)
 									.substr(2, 9)}`;
 
-					cleanedMeals[finalMealId] = value;
+					// Convert boolean to number if needed, or keep the existing number
+					// Ensure quantity is at least 0
+					cleanedMeals[finalMealId] = Math.max(
+						0,
+						typeof value === "boolean" ? (value ? 1 : 0) : Number(value) || 0
+					);
 				});
+			}
+
+			// Process client selections
+			const clientSelections: Record<string, any> = {};
+			if (selection.clientSelections) {
+				Object.entries(selection.clientSelections).forEach(
+					([clientId, clientData]) => {
+						if (clientData && typeof clientData === "object") {
+							const cleanedClientMeals: Record<string, number> = {};
+							if (clientData.selectedMeals) {
+								Object.entries(clientData.selectedMeals).forEach(
+									([mealId, value]) => {
+										// Ensure quantity is at least 0
+										cleanedClientMeals[mealId] = Math.max(
+											0,
+											typeof value === "boolean"
+												? value
+													? 1
+													: 0
+												: Number(value) || 0
+										);
+									}
+								);
+							}
+							clientSelections[clientId] = {
+								clientId,
+								clientName: clientData.clientName || `Client ${clientId}`,
+								selectedMeals: cleanedClientMeals,
+							};
+						}
+					}
+				);
 			}
 
 			return {
 				weekNumber: selection.weekNumber,
 				meals: cleanedMeals,
-				...(selection.date ? { date: selection.date } : {}), // Only include date if it was provided
+				clientSelections,
+				...(selection.date ? { date: selection.date } : {}),
 			};
 		});
-		console.log("Processed selections:", processedSelections);
 
 		const result = await SelectionsModel.findOneAndUpdate(
 			{},
@@ -250,7 +285,6 @@ apiRouter.post("/selections", async (req: Request, res: Response) => {
 			},
 			{ upsert: true, new: true }
 		);
-		console.log("Saved selections:", result);
 
 		res.json(result);
 	} catch (error) {
