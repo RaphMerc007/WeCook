@@ -61,28 +61,28 @@ app.use((req, res, next) => {
 	next();
 });
 
-// Serve uploaded files
-app.use("/uploads", express.static(uploadsDir));
-
-// API Routes
-app.get("/api/health", (req, res) => {
-	res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
 // MongoDB connection
 mongoose
 	.connect(mongoUri)
 	.then(() => console.log("Connected to MongoDB"))
 	.catch((err: Error) => console.error("MongoDB connection error:", err));
 
-// Routes
-app.get("/api/selections", async (req: Request, res: Response) => {
+// Create Router for API routes
+const apiRouter = express.Router();
+
+// Health check endpoint
+apiRouter.get("/health", (req, res) => {
+	res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Mount all other API routes
+apiRouter.get("/selections", async (req: Request, res: Response) => {
 	try {
 		console.log("Fetching selections...");
 		const selections = await SelectionsModel.find();
 		console.log("Found selections:", selections);
 
-		if (!selections) {
+		if (!selections || selections.length === 0) {
 			console.log("No selections found, creating new document");
 			const newSelections = new SelectionsModel({
 				selections: [
@@ -96,7 +96,7 @@ app.get("/api/selections", async (req: Request, res: Response) => {
 			});
 			await newSelections.save();
 			console.log("Created new selections document:", newSelections);
-			return res.json(newSelections);
+			return res.json([newSelections]);
 		}
 
 		res.json(selections);
@@ -122,7 +122,7 @@ interface Meal {
 	sideDishes: string[];
 }
 
-app.post("/api/selections", async (req: Request, res: Response) => {
+apiRouter.post("/selections", async (req: Request, res: Response) => {
 	try {
 		console.log("Saving selections:", req.body);
 		const { totalWeeks, selections } = req.body;
@@ -154,8 +154,8 @@ app.post("/api/selections", async (req: Request, res: Response) => {
 });
 
 // File upload endpoint
-app.post(
-	"/api/upload",
+apiRouter.post(
+	"/upload",
 	// @ts-ignore - Known type mismatch between multer and express
 	upload.single("file"),
 	async (
@@ -218,7 +218,7 @@ app.post(
 );
 
 // Get meal by ID
-app.get("/api/meals/:id", async (req, res) => {
+apiRouter.get("/meals/:id", async (req, res) => {
 	try {
 		console.log("Fetching meal:", req.params.id);
 		const meal = await MealModel.findOne({ id: req.params.id });
@@ -235,7 +235,7 @@ app.get("/api/meals/:id", async (req, res) => {
 });
 
 // Get all meals
-app.get("/api/meals", async (req: Request, res: Response) => {
+apiRouter.get("/meals", async (req: Request, res: Response) => {
 	try {
 		console.log("Fetching all meals...");
 		const { date } = req.query;
@@ -278,7 +278,7 @@ app.get("/api/meals", async (req: Request, res: Response) => {
 });
 
 // Import meals
-app.post("/api/meals", async (req: Request, res: Response) => {
+apiRouter.post("/meals", async (req: Request, res: Response) => {
 	try {
 		console.log("Importing meals:", req.body);
 		const { meals, date } = req.body;
@@ -349,7 +349,7 @@ app.post("/api/meals", async (req: Request, res: Response) => {
 });
 
 // Clear all meals
-app.post("/api/meals/clear", async (req, res) => {
+apiRouter.post("/meals/clear", async (req, res) => {
 	try {
 		console.log("Clearing all meals from database...");
 		await MealModel.deleteMany({});
@@ -360,6 +360,12 @@ app.post("/api/meals/clear", async (req, res) => {
 		res.status(500).json({ error: "Failed to clear meals" });
 	}
 });
+
+// Mount the API router
+app.use("/api", apiRouter);
+
+// Serve uploaded files
+app.use("/uploads", express.static(uploadsDir));
 
 // 404 handler for API routes
 app.use("/api/*", (req, res) => {
