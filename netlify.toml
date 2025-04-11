@@ -1,3 +1,8 @@
 [build]
-  command = "yarn install && cd web-app && yarn install && yarn build && cd ../backend && yarn install && yarn build"
-  publish = "web-app/dist" 
+  command = "yarn install && cd web-app && yarn install && yarn build"
+  publish = "web-app/dist"
+
+[build.environment]
+  NODE_VERSION = "22.14.0"
+  YARN_VERSION = "1.22.22"
+  NPM_FLAGS = "--no-optional" 
