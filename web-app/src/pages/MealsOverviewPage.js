@@ -53,7 +53,11 @@ export default function MealsOverviewPage(container, store) {
 							if (selection.meals) {
 								Object.entries(selection.meals).forEach(
 									([mealId, quantity]) => {
-										if (mealId && mealId !== "undefined") {
+										// Check if this is a valid meal ID from our store
+										const isValidMeal = store.state.meals.some(
+											(meal) => meal.id === mealId
+										);
+										if (mealId && isValidMeal) {
 											cleanedMeals[mealId] = quantity;
 										}
 									}
