@@ -172,6 +172,11 @@ export default function ClientMealsPage(container, store, router) {
 			const response = await fetch(`${API_BASE_URL}/selections`);
 			const mainDocument = await response.json();
 
+			// Initialize selections array if it doesn't exist
+			if (!mainDocument.selections) {
+				mainDocument.selections = [];
+			}
+
 			// Find or create selection for the date
 			let selection = mainDocument.selections.find((s) => s.date === date);
 			if (!selection) {
