@@ -1,0 +1,32 @@
+branch = "publicV1"
+plugins = []
+headers = []
+redirects = []
+
+[functions]
+
+[functions."*"]
+
+[build]
+publish = "/Users/raphaelmercier/Documents/Wecook local/WeCook/web-app/web-app/dist"
+publishOrigin = "config"
+commandOrigin = "config"
+base = "/Users/raphaelmercier/Documents/Wecook local/WeCook/web-app"
+command = "cd web-app && yarn install && yarn add typescript@5.2.2 --dev && yarn build"
+
+[build.environment]
+NODE_VERSION = "22.14.0"
+YARN_VERSION = "1.22.22"
+NPM_FLAGS = "--no-optional"
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
