@@ -23,10 +23,12 @@ export default function ClientMealsPage(container, store, router) {
 			// Get client's selections from the main document
 			const clientSelections =
 				mainDocument?.selections?.flatMap((selection) => {
-					const clientSelection = selection.clientSelections?.[clientId];
+					const clientSelection = selection.clients?.find(
+						(c) => c.clientId === clientId
+					);
 					if (!clientSelection) return [];
 
-					return Object.entries(clientSelection.selectedMeals).map(
+					return Object.entries(clientSelection.meals).map(
 						([mealId, quantity]) => ({
 							mealId,
 							quantity,
@@ -170,19 +172,17 @@ export default function ClientMealsPage(container, store, router) {
 
 			// Get current selections
 			const response = await fetch(`${API_BASE_URL}/selections`);
-			const mainDocument = await response.json();
-
-			// Initialize selections array if it doesn't exist
-			if (!mainDocument.selections) {
-				mainDocument.selections = [];
-			}
+			const data = await response.json();
+			const mainDocument = data[0];
 
 			// Find or create selection for the date
 			let selection = mainDocument.selections.find((s) => s.date === date);
 			if (!selection) {
 				// Create new selection if it doesn't exist
 				selection = {
-					date,
+					weekNumber: mainDocument.selections.length + 1,
+					meals: {},
+					date: date,
 					clients: [],
 				};
 				mainDocument.selections.push(selection);
@@ -211,16 +211,16 @@ export default function ClientMealsPage(container, store, router) {
 			}
 
 			// Update the main document
-			const updateResponse = await fetch(
-				`${API_BASE_URL}/selections/${mainDocument._id}`,
-				{
-					method: "PUT",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify(mainDocument),
-				}
-			);
+			const updateResponse = await fetch(`${API_BASE_URL}/selections`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					totalWeeks: mainDocument.totalWeeks,
+					selections: mainDocument.selections,
+				}),
+			});
 
 			if (!updateResponse.ok) {
 				throw new Error("Failed to update selections");
