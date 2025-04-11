@@ -56,7 +56,8 @@ export default function MealsOverviewPage(container, store) {
 										// Check if this is a valid meal ID from our store or a generated ID
 										const isValidMeal =
 											store.state.meals.some((meal) => meal.id === mealId) ||
-											mealId.startsWith("generated-");
+											mealId.startsWith("generated-") ||
+											/^[a-z-]+-\d+-\w+$/.test(mealId);
 										if (mealId && isValidMeal) {
 											cleanedMeals[mealId] = quantity;
 										}
