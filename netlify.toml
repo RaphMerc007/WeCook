@@ -5,4 +5,7 @@
 [build.environment]
   NODE_VERSION = "22.14.0"
   YARN_VERSION = "1.22.22"
-  NPM_FLAGS = "--no-optional" 
+  NPM_FLAGS = "--no-optional"
+
+[context.production]
+  branch = "publicV1" 
