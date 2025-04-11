@@ -112,12 +112,6 @@ app.use((req, res, next) => {
 	next();
 });
 
-// Add connection pooling configuration
-mongoose.set("maxPoolSize", 10);
-mongoose.set("minPoolSize", 2);
-mongoose.set("serverSelectionTimeoutMS", 5000);
-mongoose.set("socketTimeoutMS", 45000);
-
 // Optimize MongoDB connection
 mongoose
 	.connect(mongoUri, {
