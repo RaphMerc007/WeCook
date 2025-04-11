@@ -155,6 +155,7 @@ export default function MealsOverviewPage(container, store) {
 				// Convert meals object to array of entries and filter
 				const mealEntries = Object.entries(weekData.meals);
 				console.log("Processing meals entries:", mealEntries);
+				console.log("Store state meals:", store.state.meals);
 
 				mealEntries
 					.filter(([mealId, quantity]) => {
@@ -174,8 +175,12 @@ export default function MealsOverviewPage(container, store) {
 
 		console.log("Loading overview meals for IDs:", Array.from(mealIds));
 
+		// Get all meals from the store
+		const allMeals = store.state.meals || [];
+		console.log("All meals from store:", allMeals);
+
 		overviewMeals = {};
-		store.state.meals.forEach((meal) => {
+		allMeals.forEach((meal) => {
 			if (mealIds.has(meal.id)) {
 				console.log("Found meal in store:", meal.id);
 				overviewMeals[meal.id] = meal;
