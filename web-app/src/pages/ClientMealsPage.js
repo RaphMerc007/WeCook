@@ -189,11 +189,22 @@ export default function ClientMealsPage(container, store, router) {
 			// Find or create selection for the date
 			let selection = mainDocument.selections.find((s) => s.date === date);
 			if (!selection) {
+				// Ensure date is in a proper ISO format, not a string "null"
+				// Format the date as an ISO string that matches the existing date format
+				const formattedDate = date
+					? new Date(date + "T00:00:00.000Z").toISOString()
+					: null;
+
+				if (!formattedDate) {
+					console.error("Invalid date value:", date);
+					throw new Error("Cannot create selection with invalid date");
+				}
+
 				// Create new selection if it doesn't exist
 				selection = {
 					weekNumber: mainDocument.selections.length + 1,
 					meals: {},
-					date: date,
+					date: formattedDate,
 					clients: [],
 				};
 				mainDocument.selections.push(selection);
@@ -225,7 +236,15 @@ export default function ClientMealsPage(container, store, router) {
 			// Prepare the request payload
 			const payload = {
 				totalWeeks: mainDocument.totalWeeks,
-				selections: mainDocument.selections,
+				selections: mainDocument.selections.filter((selection) => {
+					// Filter out selections with invalid dates
+					if (!selection.date || selection.date === "null") {
+						return false;
+					}
+
+					// Keep all valid date selections
+					return true;
+				}),
 			};
 			console.log("Sending update payload:", JSON.stringify(payload));
 
@@ -262,8 +281,28 @@ export default function ClientMealsPage(container, store, router) {
 
 	function handleDateSelect(event) {
 		console.log("Date select event:", event.target.value);
-		selectedDate = event.target.value;
-		loadDateMeals();
+		const dateValue = event.target.value;
+
+		// Validate the date format
+		if (dateValue && dateValue !== "null") {
+			try {
+				// Ensure it's a valid date in YYYY-MM-DD format
+				const date = new Date(dateValue + "T00:00:00");
+				if (isNaN(date.getTime())) {
+					console.error("Invalid date selected:", dateValue);
+					return;
+				}
+				selectedDate = dateValue;
+				loadDateMeals();
+			} catch (error) {
+				console.error("Error parsing selected date:", error);
+			}
+		} else {
+			// Handle empty selection
+			selectedDate = null;
+			weekMeals = [];
+			render();
+		}
 	}
 
 	function render() {
@@ -300,14 +339,20 @@ export default function ClientMealsPage(container, store, router) {
 
 		// Get unique dates from selections and sort them
 		const dates = (store.state.selections || [])
-			.filter((s) => s.date)
+			.filter((s) => s.date && s.date !== "null") // Explicitly filter out "null" string values
 			.map((s) => {
 				try {
+					// Parse the date string, ensuring it's a valid date
 					const date = new Date(s.date);
-					if (isNaN(date.getTime())) return null;
+					if (isNaN(date.getTime())) {
+						console.warn("Invalid date found:", s.date);
+						return null;
+					}
+					// Adjust for timezone and convert to YYYY-MM-DD format
 					date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
 					return date.toISOString().split("T")[0];
 				} catch (error) {
+					console.error("Error parsing date:", s.date, error);
 					return null;
 				}
 			})
@@ -315,7 +360,7 @@ export default function ClientMealsPage(container, store, router) {
 			.filter((date, index, self) => self.indexOf(date) === index)
 			.sort();
 
-		console.log("Processed dates:", dates);
+		console.log("Processed dates for dropdown:", dates);
 
 		// Separate regular and family meals
 		const regularMeals = weekMeals.filter(
