@@ -3,6 +3,24 @@ import { API_BASE_URL } from "../config";
 export default function ClientsPage(container, store, router) {
 	let isModalOpen = false;
 	let editingClient = null;
+	let isLoading = true;
+
+	async function loadData() {
+		try {
+			const response = await fetch(`${API_BASE_URL}/clients`);
+			if (!response.ok) {
+				throw new Error("Failed to fetch clients");
+			}
+			const clients = await response.json();
+			store.setState({ clients });
+			isLoading = false;
+			render();
+		} catch (error) {
+			console.error("Error loading clients:", error);
+			isLoading = false;
+			render();
+		}
+	}
 
 	function validateForm(values) {
 		const errors = {};
@@ -134,70 +152,78 @@ export default function ClientsPage(container, store, router) {
 
 	function render() {
 		container.innerHTML = `
-      <div class="container">
-        <div class="group">
-          <h2>Clients</h2>
-          <button class="button" onclick="window.openAddModal()">
-            Add Client
-          </button>
-        </div>
+			<div class="container">
+				<div class="group">
+					<h2>Clients</h2>
+					<button class="button" onclick="window.openAddModal()">
+						Add Client
+					</button>
+				</div>
 
-        <div class="stack">
-          ${store.state.clients
-						.map(
-							(client) => `
-            <div class="card">
-              <div class="group">
-                <div>
-                  <h3>${client.name}</h3>
-                  <p class="text-muted">${client.mealsPerWeek} meals per week</p>
-                </div>
-                <div class="group">
-                  <button class="button" onclick="window.navigateToClientMeals('${client.id}')">
-                    Select Meals
-                  </button>
-                  <button class="button" onclick="window.openEditModal('${client.id}')">
-                    Edit
-                  </button>
-                  <button class="button button-danger" onclick="window.removeClient('${client.id}')">
-                    Remove
-                  </button>
-                </div>
-              </div>
-            </div>
-          `
-						)
-						.join("")}
-        </div>
+				${
+					isLoading
+						? '<div class="loading">Loading clients...</div>'
+						: `<div class="stack">
+							${
+								store.state.clients && store.state.clients.length > 0
+									? store.state.clients
+											.map(
+												(client) => `
+											<div class="card">
+												<div class="group">
+													<div>
+														<h3>${client.name}</h3>
+														<p class="text-muted">${client.mealsPerWeek} meals per week</p>
+													</div>
+													<div class="group">
+														<button class="button" onclick="window.navigateToClientMeals('${client.id}')">
+															Select Meals
+														</button>
+														<button class="button" onclick="window.openEditModal('${client.id}')">
+															Edit
+														</button>
+														<button class="button button-danger" onclick="window.removeClient('${client.id}')">
+															Remove
+														</button>
+													</div>
+												</div>
+											</div>
+										`
+											)
+											.join("")
+									: '<div class="empty-state">No clients found. Add your first client to get started.</div>'
+							}
+						</div>`
+				}
 
-        ${
+				${
 					isModalOpen
 						? `
-          <div class="modal-overlay" onclick="window.closeModal()">
-            <div class="modal" onclick="event.stopPropagation()">
-              <h3>${editingClient ? "Edit Client" : "Add New Client"}</h3>
-              <form id="client-form" onsubmit="window.handleSubmit(event)">
-                <div class="stack">
-                  <div>
-                    <label for="name">Name</label>
-                    <input type="text" id="name" name="name" class="input" required>
-                  </div>
-                  <div>
-                    <label for="mealsPerWeek">Meals per Week</label>
-                    <input type="number" id="mealsPerWeek" name="mealsPerWeek" class="input" min="1" required>
-                  </div>
-                  <button type="submit" class="button">
-                    ${editingClient ? "Save Changes" : "Add Client"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        `
+					<div class="modal-overlay" onclick="window.closeModal()">
+						<div class="modal" onclick="event.stopPropagation()">
+							<h3>${editingClient ? "Edit Client" : "Add New Client"}</h3>
+							<form id="client-form" onsubmit="window.handleSubmit(event)">
+								<div class="stack">
+									<div>
+										<label for="name">Name</label>
+										<input type="text" id="name" name="name" class="input" required>
+									</div>
+									<div>
+										<label for="mealsPerWeek">Meals per Week</label>
+										<input type="number" id="mealsPerWeek" name="mealsPerWeek" class="input" min="1" required>
+									</div>
+									<button type="submit" class="button">
+										${editingClient ? "Save Changes" : "Add Client"}
+									</button>
+								</div>
+							</form>
+						</div>
+					</div>
+				`
 						: ""
 				}
-      </div>
-    `;
+			</div>
+		`;
 
 		// Attach event handlers to window
 		window.openAddModal = () => {
@@ -215,6 +241,6 @@ export default function ClientsPage(container, store, router) {
 		};
 	}
 
-	// Initial render
-	render();
+	// Initial load and render
+	loadData();
 }
