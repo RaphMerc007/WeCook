@@ -516,6 +516,54 @@ apiRouter.get("/meals", async (req: Request, res: Response) => {
 	}
 });
 
+// Get available dates for client meals
+apiRouter.get("/available-dates", async (req: Request, res: Response) => {
+	try {
+		console.log("Fetching available dates");
+		const { clientId } = req.query;
+
+		// Query options
+		const query: any = {};
+		if (clientId) {
+			query.clientId = clientId;
+		}
+
+		// Get all unique dates from ClientMealSelectionModel
+		const selections = await ClientMealSelectionModel.find(query);
+
+		// Extract and format dates to YYYY-MM-DD
+		const uniqueDates = new Set<string>();
+
+		selections.forEach((selection) => {
+			const dateObj = new Date(selection.date);
+			const formattedDate = dateObj.toISOString().split("T")[0]; // YYYY-MM-DD
+			uniqueDates.add(formattedDate);
+		});
+
+		// If no dates found, return dates for the next 7 days
+		if (uniqueDates.size === 0) {
+			const today = new Date();
+			for (let i = 0; i < 7; i++) {
+				const date = new Date(today);
+				date.setDate(today.getDate() + i);
+				const formattedDate = date.toISOString().split("T")[0]; // YYYY-MM-DD
+				uniqueDates.add(formattedDate);
+			}
+		}
+
+		// Convert to array and sort
+		const dateArray = Array.from(uniqueDates).sort();
+
+		res.json({
+			success: true,
+			dates: dateArray,
+		});
+	} catch (error) {
+		console.error("Error fetching available dates:", error);
+		res.status(500).json({ error: "Failed to fetch available dates" });
+	}
+});
+
 // Client meals endpoint
 apiRouter.get("/client-meals", async (req: Request, res: Response) => {
 	try {
@@ -530,34 +578,26 @@ apiRouter.get("/client-meals", async (req: Request, res: Response) => {
 		// Get all meals from database
 		const allMeals = await MealModel.find();
 
-		// Generate IDs for meals without IDs based on name
+		// Generate IDs for meals without IDs
 		const mealsWithIds = allMeals.map((meal) => {
 			if (meal.id) return meal;
 
-			// Create ID based on name with hyphens
+			// Create ID based on name with hyphens and a random string
 			const nameSlug = meal.name.toLowerCase().replace(/\s+/g, "-");
 			const randomId = Math.random().toString(36).substring(7);
-			const newId = `${nameSlug}-${randomId}`;
-
-			// Update the meal with the new ID
-			MealModel.findByIdAndUpdate(meal._id, { id: newId }).catch((err) => {
-				console.error(`Failed to update meal ${meal.name} with new ID:`, err);
-			});
-
 			return {
 				...meal.toObject(),
-				id: newId,
+				id: `${nameSlug}-${randomId}`,
 			};
 		});
 
-		// Format the date consistently
-		const formattedDate = new Date(date as string).toISOString().split("T")[0];
-
-		// Return in the format expected by the client code
+		// Return the response with all meals and the requested date
 		return res.json({
 			success: true,
-			meals: mealsWithIds,
-			date: formattedDate,
+			data: {
+				meals: mealsWithIds,
+				selectedDate: date,
+			},
 		});
 	} catch (error) {
 		console.error("Error in GET /client-meals:", error);
@@ -651,13 +691,6 @@ apiRouter.post("/meals/clear", async (req, res) => {
 	}
 });
 
-// Add proper interface for meal selection
-interface MealSelection {
-	mealId: string;
-	quantity: number;
-	date: string;
-}
-
 // Client meal selection endpoints
 apiRouter.get("/client-selections", async (req: Request, res: Response) => {
 	try {
@@ -665,21 +698,25 @@ apiRouter.get("/client-selections", async (req: Request, res: Response) => {
 
 		let query: any = {};
 
-		// Filter by clientId/id if provided
+		// Filter by clientId if provided
 		if (clientId) {
-			query.id = clientId;
+			query.clientId = clientId;
 		}
 
-		// If we want to filter by date, we'll need to use $elemMatch on the selectedMeals array
+		// Filter by date if provided (exact date match)
 		if (date) {
-			// Convert to string in YYYY-MM-DD format
-			const formattedDate = new Date(date as string)
-				.toISOString()
-				.split("T")[0];
+			// Convert to Date object to ensure consistent format
+			const queryDate = new Date(date as string);
+			// Set time to start of day
+			queryDate.setHours(0, 0, 0, 0);
 
-			// Find clients with selections matching this date
-			query["selectedMeals"] = {
-				$elemMatch: { date: formattedDate },
+			// Create date range for the entire day
+			const nextDay = new Date(queryDate);
+			nextDay.setDate(nextDay.getDate() + 1);
+
+			query.date = {
+				$gte: queryDate,
+				$lt: nextDay,
 			};
 		}
 
@@ -697,45 +734,8 @@ apiRouter.get(
 	async (req: Request, res: Response) => {
 		try {
 			const { clientId } = req.params;
-			// Use the ID field instead of clientId
-			const client = await ClientMealSelectionModel.findOne({ id: clientId });
-
-			// If no client exists with this ID, return an empty object for backward compatibility
-			if (!client) {
-				return res.json({});
-			}
-
-			// For backward compatibility, transform into an object keyed by date
-			// The ClientMealsPage.js expects store.state.clientSelections to be an object
-			// where keys are dates and values are selection objects
-			interface SelectionObject {
-				clientId: string;
-				date: string;
-				meals: Array<{ id: string; quantity: number }>;
-			}
-
-			const clientSelectionsObject: Record<string, SelectionObject> = {};
-
-			if (client.selectedMeals && client.selectedMeals.length > 0) {
-				// Group selections by date
-				client.selectedMeals.forEach((meal) => {
-					if (!clientSelectionsObject[meal.date]) {
-						clientSelectionsObject[meal.date] = {
-							clientId: client.id,
-							date: meal.date,
-							meals: [],
-						};
-					}
-
-					clientSelectionsObject[meal.date].meals.push({
-						id: meal.mealId,
-						quantity: meal.quantity,
-					});
-				});
-			}
-
-			// Return the object with dates as keys
-			res.json(clientSelectionsObject);
+			const selections = await ClientMealSelectionModel.find({ clientId });
+			res.json(selections);
 		} catch (error) {
 			console.error("Error fetching client selections:", error);
 			res.status(500).json({ error: "Failed to fetch client selections" });
@@ -746,124 +746,74 @@ apiRouter.get(
 // Add or update a client selection
 apiRouter.post("/client-selections", async (req: Request, res: Response) => {
 	try {
-		const {
-			clientId,
-			name,
-			mealsPerWeek,
-			date,
-			mealId,
-			quantity,
-			selectedMeals,
-		} = req.body;
+		const { clientId, date, mealId, quantity, selections } = req.body;
 
-		// Validate required fields
-		if (!clientId) {
-			return res.status(400).json({ error: "Client ID is required" });
-		}
+		// Handle case where selections object is provided
+		if (selections) {
+			console.log("Processing selections object:", selections);
 
-		// Find existing client or create a new one
-		let client = await ClientMealSelectionModel.findOne({ id: clientId });
+			// Use date from selections object if provided, or fallback to the date in the request
+			const selectionDate = selections.date || date;
 
-		// If client doesn't exist, create a new one
-		if (!client) {
-			// Create a new client if not found
-			if (!name) {
+			if (!clientId || !selectionDate) {
 				return res
 					.status(400)
-					.json({ error: "Name is required for new clients" });
+					.json({ error: "Missing required fields (clientId or date)" });
 			}
 
-			// Default mealsPerWeek to 0 if not provided
-			const clientMealsPerWeek = mealsPerWeek || 0;
+			// Format date to ensure consistency
+			const formattedDate = new Date(selectionDate);
 
-			// Create initial client document
-			client = new ClientMealSelectionModel({
-				id: clientId,
-				name,
-				mealsPerWeek: clientMealsPerWeek,
-				selectedMeals: [],
-			});
+			if (selections.meals && Array.isArray(selections.meals)) {
+				// Create or update multiple meal selections
+				const results = await Promise.all(
+					selections.meals.map(
+						async (meal: { id?: string; quantity?: number | string }) => {
+							if (!meal.id) {
+								return null; // Skip meals without ID
+							}
 
-			await client.save();
-		}
-
-		// Handle full selectedMeals array if provided
-		if (selectedMeals && Array.isArray(selectedMeals)) {
-			// Directly update with MongoDB operator
-			await ClientMealSelectionModel.updateOne(
-				{ id: clientId },
-				{
-					$set: {
-						selectedMeals: selectedMeals,
-						updatedAt: new Date(),
-					},
-				}
-			);
-
-			// Fetch the updated client
-			client = await ClientMealSelectionModel.findOne({ id: clientId });
-		}
-		// Handle adding/updating a single meal selection
-		else if (date && mealId) {
-			// Format date to ensure consistency (YYYY-MM-DD)
-			const formattedDate = new Date(date).toISOString().split("T")[0];
-
-			// Validate quantity is a number and at least 0
-			const validatedQuantity = Math.max(0, Number(quantity) || 0);
-
-			if (validatedQuantity === 0) {
-				// Remove the meal if quantity is 0
-				await ClientMealSelectionModel.updateOne(
-					{ id: clientId },
-					{
-						$pull: {
-							selectedMeals: {
-								mealId: mealId,
-								date: formattedDate,
-							},
-						},
-						$set: { updatedAt: new Date() },
-					}
-				);
-			} else {
-				// First try to update existing
-				const updateResult = await ClientMealSelectionModel.updateOne(
-					{
-						id: clientId,
-						"selectedMeals.mealId": mealId,
-						"selectedMeals.date": formattedDate,
-					},
-					{
-						$set: {
-							"selectedMeals.$.quantity": validatedQuantity,
-							updatedAt: new Date(),
-						},
-					}
-				);
-
-				// If no document was updated, add new meal selection
-				if (updateResult.matchedCount === 0) {
-					await ClientMealSelectionModel.updateOne(
-						{ id: clientId },
-						{
-							$push: {
-								selectedMeals: {
-									mealId,
-									date: formattedDate,
-									quantity: validatedQuantity,
-								},
-							},
-							$set: { updatedAt: new Date() },
+							return await ClientMealSelectionModel.findOneAndUpdate(
+								{ clientId, date: formattedDate, mealId: meal.id },
+								{ quantity: Math.max(0, Number(meal.quantity) || 0) },
+								{ upsert: true, new: true }
+							);
 						}
-					);
-				}
+					)
+				);
+
+				// Filter out null results
+				const validResults = results.filter((result) => result !== null);
+
+				return res.json({
+					message: "Multiple selections updated",
+					count: validResults.length,
+					results: validResults,
+				});
 			}
 
-			// Fetch the updated client
-			client = await ClientMealSelectionModel.findOne({ id: clientId });
+			return res.status(400).json({ error: "Invalid selections format" });
 		}
 
-		res.json(client);
+		// Handle simple case with direct mealId and quantity
+		if (!clientId || !date || !mealId) {
+			return res.status(400).json({ error: "Missing required fields" });
+		}
+
+		// Validate quantity is a number and at least 0
+		const validatedQuantity = Math.max(0, Number(quantity) || 0);
+
+		// Format date to ensure consistency
+		const formattedDate = new Date(date);
+
+		// Find existing record or create a new one
+		const result = await ClientMealSelectionModel.findOneAndUpdate(
+			{ clientId, date: formattedDate, mealId },
+			{ quantity: validatedQuantity },
+			{ upsert: true, new: true }
+		);
+
+		res.json(result);
 	} catch (error) {
 		console.error("Error saving client selection:", error);
 		res.status(500).json({ error: "Failed to save client selection" });
@@ -876,94 +826,26 @@ apiRouter.delete("/client-selections", async (req: Request, res: Response) => {
 		const { clientId, date, mealId } = req.body;
 
 		if (!clientId) {
-			return res.status(400).json({ error: "Client ID is required" });
+			return res.status(400).json({ error: "Missing clientId" });
 		}
 
-		// If no specific date or mealId, delete the entire client record
-		if (!date && !mealId) {
-			const result = await ClientMealSelectionModel.deleteOne({ id: clientId });
-			return res.json({
-				message: "Client deleted successfully",
-				deletedCount: result.deletedCount || 0,
-			});
-		}
+		let query: any = { clientId };
 
-		// Find the client first to get the original count for reporting
-		const client = await ClientMealSelectionModel.findOne({ id: clientId });
-
-		if (!client) {
-			return res.status(404).json({ error: "Client not found" });
-		}
-
-		// Store the original count for calculating deletedCount
-		const originalCount = client.selectedMeals
-			? client.selectedMeals.length
-			: 0;
-		let result;
-
-		// If date provided, filter by date
+		// Add date filter if provided
 		if (date) {
-			// Format date to ensure consistency (YYYY-MM-DD)
-			const formattedDate = new Date(date).toISOString().split("T")[0];
-
-			// If mealId also provided, remove specific meal for that date
-			if (mealId) {
-				result = await ClientMealSelectionModel.updateOne(
-					{ id: clientId },
-					{
-						$pull: {
-							selectedMeals: {
-								mealId: mealId,
-								date: formattedDate,
-							},
-						},
-						$set: { updatedAt: new Date() },
-					}
-				);
-			}
-			// Otherwise, remove all meals for that date
-			else {
-				result = await ClientMealSelectionModel.updateOne(
-					{ id: clientId },
-					{
-						$pull: {
-							selectedMeals: {
-								date: formattedDate,
-							},
-						},
-						$set: { updatedAt: new Date() },
-					}
-				);
-			}
-		}
-		// If only mealId provided, remove all occurrences of that meal
-		else if (mealId) {
-			result = await ClientMealSelectionModel.updateOne(
-				{ id: clientId },
-				{
-					$pull: {
-						selectedMeals: {
-							mealId: mealId,
-						},
-					},
-					$set: { updatedAt: new Date() },
-				}
-			);
+			query.date = new Date(date);
 		}
 
-		// Fetch the updated client to calculate how many items were deleted
-		const updatedClient = await ClientMealSelectionModel.findOne({
-			id: clientId,
-		});
-		const updatedCount =
-			updatedClient && updatedClient.selectedMeals
-				? updatedClient.selectedMeals.length
-				: 0;
-		const deletedCount = originalCount - updatedCount;
+		// Add mealId filter if provided
+		if (mealId) {
+			query.mealId = mealId;
+		}
+
+		const result = await ClientMealSelectionModel.deleteMany(query);
 
 		res.json({
 			message: "Client selections deleted successfully",
-			deletedCount,
+			deletedCount: result.deletedCount,
 		});
 	} catch (error) {
 		console.error("Error deleting client selections:", error);
@@ -991,100 +873,69 @@ apiRouter.post(
 				error: string;
 			}> = [];
 
-			// Get clientId from request
-			const { clientId } = req.body;
+			// Get clientId from request or use 'all' to import for all clients
+			const { clientId, importAllClients } = req.body;
 
-			if (!clientId) {
-				return res.status(400).json({ error: "Client ID is required" });
-			}
-
-			// Try to find the client in the new structure
-			let client = await ClientMealSelectionModel.findOne({ id: clientId });
-
-			// If client doesn't exist, create one with placeholder data
-			if (!client) {
-				client = new ClientMealSelectionModel({
-					id: clientId,
-					name: `Client ${clientId}`, // Placeholder name
-					mealsPerWeek: 0,
-					selectedMeals: [],
-				});
-				await client.save();
-			}
-
-			// Track existing meal-date combinations to avoid duplicates
-			const mealSet = new Set<string>();
-			const importedSelections: Array<{
-				mealId: string;
-				date: string;
-				quantity: number;
-			}> = [];
-
-			// Get existing meal-date combinations
-			if (client.selectedMeals) {
-				client.selectedMeals.forEach((meal: any) => {
-					mealSet.add(`${meal.mealId}-${meal.date}`);
-				});
+			if (!clientId && !importAllClients) {
+				return res
+					.status(400)
+					.json({ error: "Missing clientId or importAllClients flag" });
 			}
 
 			// Process each week selection
 			for (const selection of oldSelections.selections) {
-				const selectionDate = selection.date;
+				const date = selection.date;
 
 				// Skip if no date is available
-				if (!selectionDate) continue;
-
-				// Format the date as YYYY-MM-DD
-				const formattedDate = new Date(selectionDate)
-					.toISOString()
-					.split("T")[0];
+				if (!date) continue;
 
 				// Extract client meals from the old structure
 				for (const [mealId, quantity] of Object.entries(selection.meals)) {
-					// Skip meals with zero quantity or invalid mealIds
-					if (!quantity || mealId === "meals" || mealId === "date") continue;
+					// Skip meals with zero quantity
+					if (!quantity) continue;
 
 					try {
-						// Check if we already have this meal-date combination
-						const mealKey = `${mealId}-${formattedDate}`;
+						if (importAllClients) {
+							// For each client in the system
+							// In a real implementation, you would query your clients collection
+							// We're using the clientIds provided in the request
+							const { clientIds } = req.body;
 
-						if (!mealSet.has(mealKey)) {
-							// Add to our import collection
-							importedSelections.push({
-								mealId,
-								date: formattedDate,
-								quantity: Number(quantity),
-							});
+							if (!clientIds || !Array.isArray(clientIds)) {
+								importErrors.push({
+									error:
+										"clientIds must be an array when importAllClients is true",
+								});
+								continue;
+							}
 
-							// Add to our set to avoid duplicates
-							mealSet.add(mealKey);
+							for (const cId of clientIds) {
+								await ClientMealSelectionModel.findOneAndUpdate(
+									{ clientId: cId, date, mealId },
+									{ quantity },
+									{ upsert: true }
+								);
+								importCount++;
+							}
+						} else {
+							// Import just for the specified client
+							await ClientMealSelectionModel.findOneAndUpdate(
+								{ clientId, date, mealId },
+								{ quantity },
+								{ upsert: true }
+							);
 							importCount++;
 						}
 					} catch (err) {
 						console.error("Error importing selection:", err);
 						importErrors.push({
 							mealId,
-							date: formattedDate,
-							clientId,
+							date: date.toString(),
+							clientId: importAllClients ? "multiple" : clientId,
 							error: (err as Error).message,
 						});
 					}
 				}
-			}
-
-			// Update the client with the imported meals using MongoDB operator
-			if (importedSelections.length > 0) {
-				await ClientMealSelectionModel.updateOne(
-					{ id: clientId },
-					{
-						$push: {
-							selectedMeals: {
-								$each: importedSelections,
-							},
-						},
-						$set: { updatedAt: new Date() },
-					}
-				);
 			}
 
 			res.json({

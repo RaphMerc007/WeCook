@@ -23,25 +23,21 @@ const MealSchema = new mongoose.Schema({
 	sideDishes: { type: [String], required: true },
 });
 
-// Schema for a meal selection within a client document
-const MealSelectionSchema = new mongoose.Schema({
-	mealId: { type: String, required: true },
-	quantity: { type: Number, required: true, default: 1 },
-	date: { type: String, required: true },
-});
-
-// Updated schema for client meal selections
+// New schema for client meal selections
 const ClientMealSelectionSchema = new mongoose.Schema({
-	id: { type: String, required: true, unique: true },
-	name: { type: String, required: true },
-	mealsPerWeek: { type: Number, required: true },
-	selectedMeals: [MealSelectionSchema],
+	clientId: { type: String, required: true },
+	date: { type: Date, required: true },
+	mealId: { type: String, required: true },
+	quantity: { type: Number, required: true, default: 0 },
+	// Add a created/updated timestamp
 	createdAt: { type: Date, default: Date.now },
-	updatedAt: { type: Date, default: Date.now },
 });
 
-// Replace the compound index with a single unique index on id
-ClientMealSelectionSchema.index({ id: 1 }, { unique: true });
+// Add a compound index to ensure uniqueness of clientId + date + mealId
+ClientMealSelectionSchema.index(
+	{ clientId: 1, date: 1, mealId: 1 },
+	{ unique: true }
+);
 
 export const SelectionsModel = mongoose.model("Selections", SelectionsSchema);
 export const MealModel = mongoose.model("Meal", MealSchema);
