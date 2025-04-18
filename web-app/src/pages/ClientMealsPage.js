@@ -102,27 +102,35 @@ export default function ClientMealsPage(container, store, router) {
 
 		isLoading = true;
 		try {
-			// First, fetch meals available for this specific date from the main selections
-			const mealsResponse = await fetch(
-				`${API_BASE_URL}/meals?date=${selectedDate}`
-			);
-			if (!mealsResponse.ok) {
-				throw new Error(
-					`Failed to fetch meals for date: ${mealsResponse.status}`
+			// Get all meals as a fallback
+			const allMeals = store.state.meals || [];
+			let availableMeals = [];
+
+			try {
+				// First try to fetch meals available for this specific date
+				const mealsResponse = await fetch(
+					`${API_BASE_URL}/meals?date=${selectedDate}`
 				);
+				if (mealsResponse.ok) {
+					availableMeals = await mealsResponse.json();
+					console.log(
+						`Available meals for date ${selectedDate}:`,
+						availableMeals
+					);
+				} else {
+					console.warn(
+						`Failed to fetch meals for date: ${mealsResponse.status}. Using all meals instead.`
+					);
+					// Fall back to using all available meals
+					availableMeals = allMeals;
+				}
+			} catch (error) {
+				console.warn("Error fetching date-specific meals:", error);
+				// Fall back to using all available meals
+				availableMeals = allMeals;
 			}
 
-			const availableMeals = await mealsResponse.json();
-			console.log(`Available meals for date ${selectedDate}:`, availableMeals);
-
-			if (availableMeals.length === 0) {
-				console.log("No meals available for this date");
-				weekMeals = [];
-				render();
-				return;
-			}
-
-			// Then, fetch client-specific selections for this date
+			// Fetch client-specific selections for this date
 			const response = await fetch(
 				`${API_BASE_URL}/client-selections?clientId=${clientId}&date=${selectedDate}`
 			);
@@ -246,6 +254,22 @@ export default function ClientMealsPage(container, store, router) {
 	// Function to import existing selections for this client
 	async function importClientSelections() {
 		try {
+			// Create a temporary loading indicator
+			const importButton = document.querySelector(
+				'[onclick="window.importClientSelections()"]'
+			);
+			if (importButton) {
+				const originalText = importButton.textContent;
+				importButton.textContent = "Importing...";
+				importButton.disabled = true;
+
+				// Restore button after 3 seconds in case of silent failure
+				setTimeout(() => {
+					importButton.textContent = originalText;
+					importButton.disabled = false;
+				}, 3000);
+			}
+
 			console.log("Importing selections for client:", clientId);
 
 			const response = await fetch(`${API_BASE_URL}/import-client-selections`, {
@@ -258,6 +282,12 @@ export default function ClientMealsPage(container, store, router) {
 				}),
 			});
 
+			// Reset the button regardless of outcome
+			if (importButton) {
+				importButton.textContent = "Import Existing Selections";
+				importButton.disabled = false;
+			}
+
 			if (!response.ok) {
 				const errorText = await response.text();
 				throw new Error(
@@ -268,9 +298,15 @@ export default function ClientMealsPage(container, store, router) {
 			const result = await response.json();
 			console.log("Import result:", result);
 
-			alert(
-				`Successfully imported ${result.imported} meal selections for this client.`
-			);
+			if (result.imported > 0) {
+				alert(
+					`Successfully imported ${result.imported} meal selections for this client.`
+				);
+			} else {
+				alert(
+					"No selections were imported. There might not be any existing selections for this client."
+				);
+			}
 
 			// Reload the data
 			loadData();
@@ -473,7 +509,13 @@ export default function ClientMealsPage(container, store, router) {
 						</div>
 					`
 							: selectedDate !== null
-							? "<div class='notification notification-warning'><p>No meals are available for this date. Please select a different date or contact an administrator to add meals for this date.</p></div>"
+							? `<div style="padding: 20px; background-color: #fff3cd; border-left: 4px solid #ffc107; margin: 20px 0;">
+                 <h3 style="margin-top: 0; color: #856404;">No Meals Available</h3>
+                 <p>There are no meals available for ${new Date(
+										selectedDate + "T00:00:00"
+									).toLocaleDateString()}.</p>
+                 <p>Please select a different date from the dropdown above or contact the administrator if you believe this is an error.</p>
+               </div>`
 							: ""
 					}
 				</div>
