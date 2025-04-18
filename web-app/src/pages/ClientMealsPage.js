@@ -377,6 +377,74 @@ export default function ClientMealsPage(container, store, router) {
 		}
 	}
 
+	// Function to generate placeholder meals
+	async function generatePlaceholderMeals() {
+		try {
+			// Show a confirmation dialog
+			if (
+				!confirm(
+					"This will generate placeholder meals from the selections data. Are you sure?"
+				)
+			) {
+				return;
+			}
+
+			// Create a temporary loading indicator
+			const generateButton = document.querySelector(
+				'[onclick="window.generatePlaceholderMeals()"]'
+			);
+			if (generateButton) {
+				const originalText = generateButton.textContent;
+				generateButton.textContent = "Generating...";
+				generateButton.disabled = true;
+
+				// Restore button after 5 seconds in case of silent failure
+				setTimeout(() => {
+					generateButton.textContent = originalText;
+					generateButton.disabled = false;
+				}, 5000);
+			}
+
+			console.log("Generating placeholder meals...");
+
+			const response = await fetch(
+				`${API_BASE_URL}/generate-placeholder-meals`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+				}
+			);
+
+			// Reset the button regardless of outcome
+			if (generateButton) {
+				generateButton.textContent = "Generate Placeholder Meals";
+				generateButton.disabled = false;
+			}
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(
+					`Failed to generate meals: ${response.status} - ${errorText}`
+				);
+			}
+
+			const result = await response.json();
+			console.log("Generation result:", result);
+
+			alert(
+				`Successfully generated ${result.newMealsCreated} placeholder meals from the selections data.`
+			);
+
+			// Reload the page to reflect changes
+			window.location.reload();
+		} catch (error) {
+			console.error("Error generating placeholder meals:", error);
+			alert(`Error generating placeholder meals: ${error.message}`);
+		}
+	}
+
 	function render() {
 		console.log("Render called with state:", {
 			selectedDate,
@@ -485,11 +553,17 @@ export default function ClientMealsPage(container, store, router) {
 							<button class="button button-secondary" onclick="window.importClientSelections()">
 								Import Existing Selections
 							</button>
-							<!-- Admin button to fix selections data -->
-							<button class="button button-danger" onclick="window.fixSelectionsData()" style="margin-left: auto;">
-								Fix Selections Data
-							</button>
 						</div>
+					</div>
+
+					<!-- Admin controls -->
+					<div class="group" style="justify-content: flex-end; margin-bottom: 20px;">
+						<button class="button button-secondary" onclick="window.generatePlaceholderMeals()">
+							Generate Placeholder Meals
+						</button>
+						<button class="button button-danger" onclick="window.fixSelectionsData()">
+							Fix Selections Data
+						</button>
 					</div>
 
 					${isLoading ? "<p>Loading...</p>" : ""}
@@ -596,6 +670,7 @@ export default function ClientMealsPage(container, store, router) {
 		window.navigateToClients = () => router.navigate("/clients");
 		window.importClientSelections = importClientSelections;
 		window.fixSelectionsData = fixSelectionsData;
+		window.generatePlaceholderMeals = generatePlaceholderMeals;
 	}
 
 	// Initial render

@@ -885,6 +885,103 @@ apiRouter.post("/fix-selections", async (req: Request, res: Response) => {
 	}
 });
 
+// Generate placeholder meals from selections data
+apiRouter.post(
+	"/generate-placeholder-meals",
+	async (req: Request, res: Response) => {
+		try {
+			console.log("Generating placeholder meals from selections data...");
+
+			// Get the current selections
+			const selections = await SelectionsModel.findOne();
+
+			if (!selections) {
+				return res.status(404).json({ error: "No selections found" });
+			}
+
+			// Extract all meal IDs from all selections
+			const mealIds = new Set<string>();
+
+			selections.selections.forEach((selection: any) => {
+				if (selection.meals) {
+					Object.entries(selection.meals).forEach(
+						([mealId, quantity]: [string, any]) => {
+							// Skip invalid keys and entries with 0 quantity
+							if (mealId !== "meals" && mealId !== "date" && quantity > 0) {
+								mealIds.add(mealId);
+							}
+						}
+					);
+				}
+			});
+
+			console.log(`Found ${mealIds.size} unique meal IDs in selections data`);
+
+			// Check if any of these meals already exist
+			const existingMeals = await MealModel.find({
+				id: { $in: Array.from(mealIds) },
+			});
+			const existingMealIds = new Set(existingMeals.map((meal) => meal.id));
+
+			console.log(`Found ${existingMeals.length} existing meals`);
+
+			// Create placeholder meals for IDs that don't exist yet
+			const newMeals = [];
+			for (const mealId of mealIds) {
+				if (!existingMealIds.has(mealId)) {
+					// Extract a readable name from the ID
+					let name = mealId;
+
+					// Try to extract a readable name from the ID format like "meal-name-timestamp-randomchars"
+					const parts = mealId.split("-");
+					if (parts.length > 3) {
+						// Remove the timestamp and random chars
+						name = parts.slice(0, -2).join(" ");
+					}
+
+					// Format the name with proper capitalization
+					name = name
+						.replace(/-/g, " ")
+						.split(" ")
+						.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+						.join(" ");
+
+					// Create a new placeholder meal
+					const newMeal = {
+						id: mealId,
+						name: name,
+						imageUrl: "placeholder.jpg",
+						category: "Regular",
+						price: 0,
+						hasSideDish: false,
+						sideDishes: [],
+					};
+
+					newMeals.push(newMeal);
+				}
+			}
+
+			console.log(`Creating ${newMeals.length} new placeholder meals`);
+
+			// Save the new meals to the database
+			if (newMeals.length > 0) {
+				await MealModel.insertMany(newMeals);
+			}
+
+			res.json({
+				message: "Placeholder meals generated successfully",
+				totalMealIds: mealIds.size,
+				existingMeals: existingMeals.length,
+				newMealsCreated: newMeals.length,
+				mealsList: newMeals,
+			});
+		} catch (error) {
+			console.error("Error generating placeholder meals:", error);
+			res.status(500).json({ error: "Failed to generate placeholder meals" });
+		}
+	}
+);
+
 // Mount the API router
 app.use("/api", apiRouter);
 
