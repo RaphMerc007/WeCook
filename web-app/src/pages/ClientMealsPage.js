@@ -316,6 +316,67 @@ export default function ClientMealsPage(container, store, router) {
 		}
 	}
 
+	// Function to fix the selections data
+	async function fixSelectionsData() {
+		try {
+			// Show a confirmation dialog
+			if (
+				!confirm("This will fix the selections data structure. Are you sure?")
+			) {
+				return;
+			}
+
+			// Create a temporary loading indicator
+			const fixButton = document.querySelector(
+				'[onclick="window.fixSelectionsData()"]'
+			);
+			if (fixButton) {
+				const originalText = fixButton.textContent;
+				fixButton.textContent = "Fixing...";
+				fixButton.disabled = true;
+
+				// Restore button after 5 seconds in case of silent failure
+				setTimeout(() => {
+					fixButton.textContent = originalText;
+					fixButton.disabled = false;
+				}, 5000);
+			}
+
+			console.log("Fixing selections data structure...");
+
+			const response = await fetch(`${API_BASE_URL}/fix-selections`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+			});
+
+			// Reset the button regardless of outcome
+			if (fixButton) {
+				fixButton.textContent = "Fix Selections Data";
+				fixButton.disabled = false;
+			}
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(
+					`Failed to fix selections: ${response.status} - ${errorText}`
+				);
+			}
+
+			const result = await response.json();
+			console.log("Fix result:", result);
+
+			alert("Selections data fixed successfully. Please reload the page.");
+
+			// Reload the page to reflect changes
+			window.location.reload();
+		} catch (error) {
+			console.error("Error fixing selections data:", error);
+			alert(`Error fixing selections data: ${error.message}`);
+		}
+	}
+
 	function render() {
 		console.log("Render called with state:", {
 			selectedDate,
@@ -424,6 +485,10 @@ export default function ClientMealsPage(container, store, router) {
 							<button class="button button-secondary" onclick="window.importClientSelections()">
 								Import Existing Selections
 							</button>
+							<!-- Admin button to fix selections data -->
+							<button class="button button-danger" onclick="window.fixSelectionsData()" style="margin-left: auto;">
+								Fix Selections Data
+							</button>
 						</div>
 					</div>
 
@@ -530,6 +595,7 @@ export default function ClientMealsPage(container, store, router) {
 		window.handleQuantityChange = handleQuantityChange;
 		window.navigateToClients = () => router.navigate("/clients");
 		window.importClientSelections = importClientSelections;
+		window.fixSelectionsData = fixSelectionsData;
 	}
 
 	// Initial render

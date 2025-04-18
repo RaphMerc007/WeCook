@@ -813,6 +813,78 @@ apiRouter.post(
 	}
 );
 
+// Fix malformed selections data
+apiRouter.post("/fix-selections", async (req: Request, res: Response) => {
+	try {
+		console.log("Fixing selections data structure...");
+
+		// Get the current selections
+		const currentSelections = await SelectionsModel.findOne();
+
+		if (!currentSelections) {
+			return res.status(404).json({ error: "No selections found to fix" });
+		}
+
+		// Create new fixed selections with proper dates
+		const fixedSelections = currentSelections.selections.map(
+			(selection: any, index: number) => {
+				// Generate dates starting from today, each 7 days apart
+				const date = new Date();
+				date.setDate(date.getDate() + index * 7);
+
+				// Clean up the meals object
+				const cleanedMeals: Record<string, number> = {};
+
+				// Only keep real meal IDs (not 'meals' or 'date' keys)
+				if (selection.meals) {
+					Object.entries(selection.meals).forEach(
+						([key, value]: [string, any]) => {
+							// Skip invalid keys
+							if (key === "meals" || key === "date") {
+								return;
+							}
+
+							// Convert value to number
+							const quantity = typeof value === "number" ? value : 0;
+
+							// Only keep non-zero quantities
+							if (quantity > 0) {
+								cleanedMeals[key] = quantity;
+							}
+						}
+					);
+				}
+
+				return {
+					weekNumber: selection.weekNumber || index + 1,
+					meals: cleanedMeals,
+					date: date.toISOString(),
+				};
+			}
+		);
+
+		// Update the selections document
+		const updatedSelections = await SelectionsModel.findOneAndUpdate(
+			{ _id: currentSelections._id },
+			{
+				totalWeeks: fixedSelections.length,
+				currentWeek: 0,
+				selections: fixedSelections,
+			},
+			{ new: true }
+		);
+
+		res.json({
+			message: "Selections data structure fixed successfully",
+			originalData: currentSelections,
+			fixedData: updatedSelections,
+		});
+	} catch (error) {
+		console.error("Error fixing selections:", error);
+		res.status(500).json({ error: "Failed to fix selections data" });
+	}
+});
+
 // Mount the API router
 app.use("/api", apiRouter);
 
