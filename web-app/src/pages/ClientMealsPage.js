@@ -102,78 +102,66 @@ export default function ClientMealsPage(container, store, router) {
 		// Initialize with empty array
 		weekMeals = [];
 
-		// First check if we have selections for this date already in the local state
+		// First check if we have client selections for this date
 		let foundSelections = false;
-		let clientSelections = [];
+		const clientSelections = [];
 
-		// Check selections collection
-		if (store.state.selections && store.state.selections.length > 0) {
-			store.state.selections.forEach((selectionDoc) => {
-				if (selectionDoc.selections && Array.isArray(selectionDoc.selections)) {
-					selectionDoc.selections.forEach((selection) => {
-						if (selection.date) {
-							const selDate = new Date(selection.date)
-								.toISOString()
-								.split("T")[0]; // YYYY-MM-DD
-							if (selDate === normalizedSelectedDate) {
-								clientSelections.push(selection);
-								foundSelections = true;
-							}
-						}
-					});
-				}
-			});
-		}
+		try {
+			// First get the client with their selected meals
+			const clientResponse = await fetch(
+				`${API_BASE_URL}/client-selections/${clientId}`
+			);
 
-		// Also check client selections
-		if (store.state.clientSelections) {
-			Object.values(store.state.clientSelections).forEach((selection) => {
-				if (selection.date) {
-					const selDate = new Date(selection.date).toISOString().split("T")[0]; // YYYY-MM-DD
-					if (selDate === normalizedSelectedDate) {
-						clientSelections.push(selection);
+			if (clientResponse.ok) {
+				const clientData = await clientResponse.json();
+				console.log("Client data:", clientData);
+
+				// Check if we have selections for the selected date
+				if (
+					clientData &&
+					clientData.selectedMeals &&
+					Array.isArray(clientData.selectedMeals)
+				) {
+					// Find selections for the current date
+					const matchingSelections = clientData.selectedMeals.filter(
+						(selection) => selection.date === normalizedSelectedDate
+					);
+
+					if (matchingSelections.length > 0) {
+						console.log("Found selections for date:", matchingSelections);
+						clientSelections.push(...matchingSelections);
 						foundSelections = true;
 					}
 				}
-			});
-		}
+			}
 
-		// Log what we found in local state
-		console.log(
-			"Found selections in local state:",
-			foundSelections,
-			clientSelections
-		);
-
-		// Try to fetch meals from API regardless of local state
-		try {
-			const response = await store.getters.api.get(
-				`/client-meals?date=${normalizedSelectedDate}`
+			// Get available meals from API
+			const response = await fetch(
+				`${API_BASE_URL}/client-meals?date=${normalizedSelectedDate}`
 			);
 
-			if (
-				response.data &&
-				response.data.meals &&
-				Array.isArray(response.data.meals)
-			) {
-				console.log("API returned meals:", response.data.meals);
+			if (!response.ok) {
+				throw new Error(`API error: ${response.status}`);
+			}
+
+			const data = await response.json();
+			console.log("API returned data:", data);
+
+			if (data && data.meals && Array.isArray(data.meals)) {
+				console.log("API returned meals:", data.meals);
 
 				// Process API meals and apply quantities from client selections
-				weekMeals = response.data.meals.map((meal) => {
+				weekMeals = data.meals.map((meal) => {
 					const mealWithQuantity = { ...meal, quantity: 0 };
 
 					// Check if this meal exists in client selections and set quantity
 					if (foundSelections) {
 						clientSelections.forEach((selection) => {
-							if (selection.meals && Array.isArray(selection.meals)) {
-								selection.meals.forEach((selectedMeal) => {
-									if (
-										selectedMeal.id === meal.id ||
-										selectedMeal._id === meal._id
-									) {
-										mealWithQuantity.quantity = selectedMeal.quantity || 0;
-									}
-								});
+							if (
+								selection.mealId === meal.id ||
+								selection.mealId === meal._id
+							) {
+								mealWithQuantity.quantity = selection.quantity || 0;
 							}
 						});
 					}
@@ -192,6 +180,7 @@ export default function ClientMealsPage(container, store, router) {
 		}
 
 		console.log("Final weekMeals:", weekMeals);
+		render();
 	}
 
 	const handleQuantityChange = async (mealId, date, change) => {
@@ -580,29 +569,77 @@ export default function ClientMealsPage(container, store, router) {
 			return;
 		}
 
-		// Create the selection object
-		const selection = {
+		// Create the selection data
+		const selectedMeals = mealsWithQuantity.map((meal) => ({
+			mealId: meal.id || meal._id,
+			quantity: meal.quantity,
 			date: normalizedDate,
-			meals: mealsWithQuantity.map((meal) => ({
-				id: meal.id || meal._id,
-				quantity: meal.quantity,
-				name: meal.name,
-			})),
-		};
+		}));
 
-		// Store in local state first
-		if (!store.state.clientSelections) {
-			store.state.clientSelections = {};
-		}
-		store.state.clientSelections[normalizedDate] = selection;
-
-		// Send to API
+		// Get the client's current information first
 		try {
-			await store.getters.api.post("/client-selections", {
-				clientId: store.state.user.id,
-				date: normalizedDate,
-				selections: selection,
+			// Fetch current client data
+			const clientResponse = await fetch(
+				`${API_BASE_URL}/client-selections/${clientId}`
+			);
+
+			let client = {};
+			if (clientResponse.ok) {
+				client = await clientResponse.json();
+			}
+
+			// Prepare the update data
+			const updateData = {
+				clientId,
+				// If the client exists, use their existing data, otherwise use defaults
+				name:
+					client.name || store.state.selectedClientName || `Client ${clientId}`,
+				mealsPerWeek:
+					client.mealsPerWeek || store.state.selectedClientMealsPerWeek || 0,
+			};
+
+			// If adding to existing selections
+			if (
+				client &&
+				client.selectedMeals &&
+				Array.isArray(client.selectedMeals)
+			) {
+				// Create a copy of the existing selections
+				const updatedSelections = [...client.selectedMeals];
+
+				// Remove any existing selections for this date
+				const filteredSelections = updatedSelections.filter(
+					(selection) => selection.date !== normalizedDate
+				);
+
+				// Add the new selections
+				updateData.selectedMeals = [...filteredSelections, ...selectedMeals];
+			} else {
+				// No existing selections, just use the new ones
+				updateData.selectedMeals = selectedMeals;
+			}
+
+			// Send to API
+			const response = await fetch(`${API_BASE_URL}/client-selections`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(updateData),
 			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(
+					`Failed to save selections: ${response.status} - ${errorText}`
+				);
+			}
+
+			const result = await response.json();
+			console.log("Selections saved successfully:", result);
+
+			// Reload data to ensure UI is in sync with server
+			loadDateMeals();
 
 			showNotification("Selections saved successfully!", "success");
 		} catch (error) {
