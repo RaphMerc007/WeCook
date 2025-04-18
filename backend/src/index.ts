@@ -2,7 +2,11 @@ import express, { Request, Response } from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import multer from "multer";
-import { SelectionsModel, MealModel } from "./models.js";
+import {
+	SelectionsModel,
+	MealModel,
+	ClientMealSelectionModel,
+} from "./models.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import { UserSelections } from "./types.js";
@@ -597,6 +601,217 @@ apiRouter.post("/meals/clear", async (req, res) => {
 		res.status(500).json({ error: "Failed to clear meals" });
 	}
 });
+
+// Client meal selection endpoints
+apiRouter.get("/client-selections", async (req: Request, res: Response) => {
+	try {
+		const { clientId, date } = req.query;
+
+		let query: any = {};
+
+		// Filter by clientId if provided
+		if (clientId) {
+			query.clientId = clientId;
+		}
+
+		// Filter by date if provided (exact date match)
+		if (date) {
+			// Convert to Date object to ensure consistent format
+			const queryDate = new Date(date as string);
+			// Set time to start of day
+			queryDate.setHours(0, 0, 0, 0);
+
+			// Create date range for the entire day
+			const nextDay = new Date(queryDate);
+			nextDay.setDate(nextDay.getDate() + 1);
+
+			query.date = {
+				$gte: queryDate,
+				$lt: nextDay,
+			};
+		}
+
+		const selections = await ClientMealSelectionModel.find(query);
+		res.json(selections);
+	} catch (error) {
+		console.error("Error fetching client selections:", error);
+		res.status(500).json({ error: "Failed to fetch client selections" });
+	}
+});
+
+// Get client selections for specific client
+apiRouter.get(
+	"/client-selections/:clientId",
+	async (req: Request, res: Response) => {
+		try {
+			const { clientId } = req.params;
+			const selections = await ClientMealSelectionModel.find({ clientId });
+			res.json(selections);
+		} catch (error) {
+			console.error("Error fetching client selections:", error);
+			res.status(500).json({ error: "Failed to fetch client selections" });
+		}
+	}
+);
+
+// Add or update a client selection
+apiRouter.post("/client-selections", async (req: Request, res: Response) => {
+	try {
+		const { clientId, date, mealId, quantity } = req.body;
+
+		if (!clientId || !date || !mealId) {
+			return res.status(400).json({ error: "Missing required fields" });
+		}
+
+		// Validate quantity is a number and at least 0
+		const validatedQuantity = Math.max(0, Number(quantity) || 0);
+
+		// Format date to ensure consistency
+		const formattedDate = new Date(date);
+
+		// Find existing record or create a new one
+		const result = await ClientMealSelectionModel.findOneAndUpdate(
+			{ clientId, date: formattedDate, mealId },
+			{ quantity: validatedQuantity },
+			{ upsert: true, new: true }
+		);
+
+		res.json(result);
+	} catch (error) {
+		console.error("Error saving client selection:", error);
+		res.status(500).json({ error: "Failed to save client selection" });
+	}
+});
+
+// Delete a client selection
+apiRouter.delete("/client-selections", async (req: Request, res: Response) => {
+	try {
+		const { clientId, date, mealId } = req.body;
+
+		if (!clientId) {
+			return res.status(400).json({ error: "Missing clientId" });
+		}
+
+		let query: any = { clientId };
+
+		// Add date filter if provided
+		if (date) {
+			query.date = new Date(date);
+		}
+
+		// Add mealId filter if provided
+		if (mealId) {
+			query.mealId = mealId;
+		}
+
+		const result = await ClientMealSelectionModel.deleteMany(query);
+
+		res.json({
+			message: "Client selections deleted successfully",
+			deletedCount: result.deletedCount,
+		});
+	} catch (error) {
+		console.error("Error deleting client selections:", error);
+		res.status(500).json({ error: "Failed to delete client selections" });
+	}
+});
+
+// Import existing client selections from the old data structure
+apiRouter.post(
+	"/import-client-selections",
+	async (req: Request, res: Response) => {
+		try {
+			// Get the current selections from the old structure
+			const oldSelections = await SelectionsModel.findOne();
+
+			if (!oldSelections) {
+				return res.status(404).json({ error: "No selections found to import" });
+			}
+
+			let importCount = 0;
+			const importErrors: Array<{
+				clientId?: string;
+				mealId?: string;
+				date?: string;
+				error: string;
+			}> = [];
+
+			// Get clientId from request or use 'all' to import for all clients
+			const { clientId, importAllClients } = req.body;
+
+			if (!clientId && !importAllClients) {
+				return res
+					.status(400)
+					.json({ error: "Missing clientId or importAllClients flag" });
+			}
+
+			// Process each week selection
+			for (const selection of oldSelections.selections) {
+				const date = selection.date;
+
+				// Skip if no date is available
+				if (!date) continue;
+
+				// Extract client meals from the old structure
+				for (const [mealId, quantity] of Object.entries(selection.meals)) {
+					// Skip meals with zero quantity
+					if (!quantity) continue;
+
+					try {
+						if (importAllClients) {
+							// For each client in the system
+							// In a real implementation, you would query your clients collection
+							// We're using the clientIds provided in the request
+							const { clientIds } = req.body;
+
+							if (!clientIds || !Array.isArray(clientIds)) {
+								importErrors.push({
+									error:
+										"clientIds must be an array when importAllClients is true",
+								});
+								continue;
+							}
+
+							for (const cId of clientIds) {
+								await ClientMealSelectionModel.findOneAndUpdate(
+									{ clientId: cId, date, mealId },
+									{ quantity },
+									{ upsert: true }
+								);
+								importCount++;
+							}
+						} else {
+							// Import just for the specified client
+							await ClientMealSelectionModel.findOneAndUpdate(
+								{ clientId, date, mealId },
+								{ quantity },
+								{ upsert: true }
+							);
+							importCount++;
+						}
+					} catch (err) {
+						console.error("Error importing selection:", err);
+						importErrors.push({
+							mealId,
+							date: date.toString(),
+							clientId: importAllClients ? "multiple" : clientId,
+							error: (err as Error).message,
+						});
+					}
+				}
+			}
+
+			res.json({
+				message: "Import completed",
+				imported: importCount,
+				errors: importErrors,
+			});
+		} catch (error) {
+			console.error("Error importing client selections:", error);
+			res.status(500).json({ error: "Failed to import client selections" });
+		}
+	}
+);
 
 // Mount the API router
 app.use("/api", apiRouter);

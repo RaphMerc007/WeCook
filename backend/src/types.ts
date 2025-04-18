@@ -23,3 +23,12 @@ export interface UserSelections {
 		date?: Date;
 	}[];
 }
+
+// New interface for client meal selections
+export interface ClientMealSelection {
+	clientId: string;
+	date: Date;
+	mealId: string;
+	quantity: number;
+	createdAt?: Date;
+}

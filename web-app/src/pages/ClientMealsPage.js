@@ -14,60 +14,27 @@ export default function ClientMealsPage(container, store, router) {
 	async function loadData() {
 		try {
 			console.log("Loading data...");
-			console.log("Fetching selections...");
-			const response = await fetch(`${API_BASE_URL}/selections`);
-			const data = await response.json();
-			const mainDocument = data[0];
-			console.log("Main document:", mainDocument);
+			console.log("Fetching client selections...");
 
-			// Store the selections data in the store for access in render
-			store.setState({ selections: data });
-
-			// Get client's selections from the main document
-			const clientSelections =
-				mainDocument?.selections?.flatMap((selection) => {
-					const clientSelection = selection.clients?.find(
-						(c) => c.clientId === clientId
-					);
-					if (!clientSelection) return [];
-
-					return Object.entries(clientSelection.meals).map(
-						([mealId, quantity]) => ({
-							mealId,
-							quantity,
-							date: selection.date,
-						})
-					);
-				}) || [];
-			console.log("Client selections:", clientSelections);
-
-			// Process dates from client selections
-			const dates = [...new Set(clientSelections.map((s) => s.date))];
-			console.log("Processed dates:", dates);
-
-			// Get all meals from store
-			const allMeals = store.state.meals || [];
-			console.log("All meals from store:", allMeals);
-
-			// Get selections for the selected date
-			const dateSelections = clientSelections.filter(
-				(s) => s.date === selectedDate
+			// Get client selections for this client
+			const response = await fetch(
+				`${API_BASE_URL}/client-selections/${clientId}`
 			);
-			console.log("Date selections:", dateSelections);
+			const clientSelections = await response.json();
+			console.log("Client selections for this client:", clientSelections);
 
-			// Set meals for the selected date
-			weekMeals = allMeals.map((meal) => {
-				const selection = dateSelections.find((s) => s.mealId === meal.id);
-				return {
-					...meal,
-					quantity: selection ? selection.quantity : 0,
-				};
-			});
-			console.log("Setting date meals:", weekMeals);
+			// Store in state for access in render
+			store.setState({ clientSelections });
 
-			render();
+			// If a date is already selected, load meals for that date
+			if (selectedDate) {
+				loadDateMeals();
+			} else {
+				render();
+			}
 		} catch (error) {
 			console.error("Error loading data:", error);
+			render();
 		}
 	}
 
@@ -139,33 +106,30 @@ export default function ClientMealsPage(container, store, router) {
 			const allMeals = store.state.meals || [];
 			console.log("All meals from store:", allMeals);
 
-			// Get current selections data
-			const response = await fetch(`${API_BASE_URL}/selections`);
-			const data = await response.json();
-			const mainDocument = data[0] || { selections: [] };
-
-			// Find selection for this date
-			const dateSelection = mainDocument.selections.find(
-				(s) =>
-					s.date === selectedDate ||
-					new Date(s.date).toISOString().split("T")[0] === selectedDate
+			// Fetch client-specific selections for this date
+			const response = await fetch(
+				`${API_BASE_URL}/client-selections?clientId=${clientId}&date=${selectedDate}`
 			);
-
-			console.log("Found date selection:", dateSelection);
-
-			// Map the meals with their quantities from the selection
-			if (dateSelection && dateSelection.meals) {
-				weekMeals = allMeals.map((meal) => ({
-					...meal,
-					quantity: dateSelection.meals[meal.id] || 0,
-				}));
-			} else {
-				// No selection found for this date, set all quantities to 0
-				weekMeals = allMeals.map((meal) => ({
-					...meal,
-					quantity: 0,
-				}));
+			if (!response.ok) {
+				throw new Error(
+					`Failed to fetch client selections: ${response.status}`
+				);
 			}
+
+			const clientSelections = await response.json();
+			console.log("Client selections for date:", clientSelections);
+
+			// Create a map of mealId to quantity
+			const mealQuantities = {};
+			clientSelections.forEach((selection) => {
+				mealQuantities[selection.mealId] = selection.quantity;
+			});
+
+			// Map the meals with their quantities from the selections
+			weekMeals = allMeals.map((meal) => ({
+				...meal,
+				quantity: mealQuantities[meal.id] || 0,
+			}));
 
 			console.log("Setting date meals:", weekMeals);
 		} catch (error) {
@@ -185,111 +149,49 @@ export default function ClientMealsPage(container, store, router) {
 				return;
 			}
 
-			// Get current selections
-			const response = await fetch(`${API_BASE_URL}/selections`);
-			if (!response.ok) {
-				throw new Error(
-					`Failed to fetch selections: ${response.status} ${response.statusText}`
-				);
+			// Find the current meal in our weekMeals array
+			const meal = weekMeals.find((m) => m.id === mealId);
+			if (!meal) {
+				console.error("Meal not found:", mealId);
+				return;
 			}
 
-			const data = await response.json();
-			console.log("Current selections data:", data);
-
-			const mainDocument = data[0] || {
-				totalWeeks: 1,
-				currentWeek: 0,
-				selections: [],
-			};
-
-			// Find or create selection for the date
-			let selection = mainDocument.selections.find(
-				(s) =>
-					s.date === date ||
-					new Date(s.date).toISOString().split("T")[0] === date
-			);
-			if (!selection) {
-				// Ensure date is in a proper ISO format, not a string "null"
-				// Format the date as an ISO string that matches the existing date format
-				const formattedDate = date
-					? new Date(date + "T00:00:00.000Z").toISOString()
-					: null;
-
-				if (!formattedDate) {
-					console.error("Invalid date value:", date);
-					throw new Error("Cannot create selection with invalid date");
-				}
-
-				// Create new selection if it doesn't exist
-				selection = {
-					weekNumber: mainDocument.selections.length + 1,
-					meals: {},
-					date: formattedDate,
-				};
-				mainDocument.selections.push(selection);
-			}
-
-			// Ensure the meals object exists
-			if (!selection.meals) {
-				selection.meals = {};
-			}
-
-			// Update meal quantity directly in the selection's meals object
-			const currentQuantity = selection.meals[mealId] || 0;
+			// Calculate the new quantity
+			const currentQuantity = meal.quantity || 0;
 			const newQuantity = Math.max(0, currentQuantity + change);
 
-			if (newQuantity > 0) {
-				selection.meals[mealId] = newQuantity;
-			} else {
-				delete selection.meals[mealId];
-			}
+			// Update the meal quantity in the UI immediately for better user experience
+			meal.quantity = newQuantity;
+			render();
 
-			// Prepare the request payload
-			const payload = {
-				totalWeeks: mainDocument.totalWeeks,
-				currentWeek: mainDocument.currentWeek || 0,
-				selections: mainDocument.selections.filter((selection) => {
-					// Filter out selections with invalid dates
-					if (!selection.date || selection.date === "null") {
-						return false;
-					}
-
-					// Keep all valid date selections
-					return true;
-				}),
-			};
-			console.log("Sending update payload:", JSON.stringify(payload));
-
-			// Update the main document
-			const updateResponse = await fetch(`${API_BASE_URL}/selections`, {
+			// Save the updated selection to the server
+			const response = await fetch(`${API_BASE_URL}/client-selections`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify(payload),
+				body: JSON.stringify({
+					clientId,
+					date,
+					mealId,
+					quantity: newQuantity,
+				}),
 			});
 
-			const responseText = await updateResponse.text();
-			console.log("Server response:", responseText);
-
-			if (!updateResponse.ok) {
+			if (!response.ok) {
+				const errorText = await response.text();
 				throw new Error(
-					`Failed to update selections: ${updateResponse.status} ${updateResponse.statusText} - ${responseText}`
+					`Failed to update selection: ${response.status} - ${errorText}`
 				);
 			}
 
-			// Update the local state immediately without waiting for loadData
-			// to provide instant feedback to the user
-			const mealToUpdate = weekMeals.find((meal) => meal.id === mealId);
-			if (mealToUpdate) {
-				mealToUpdate.quantity = newQuantity;
-				render(); // Re-render with updated quantities
-			}
+			console.log("Selection updated successfully");
 
-			// Refresh the data
-			loadData();
+			// No need to reload all data, we've already updated the UI
 		} catch (error) {
-			console.error("Error updating client selections:", error);
+			console.error("Error updating client selection:", error);
+			// If there was an error, reload data to ensure UI is in sync with server
+			loadDateMeals();
 		}
 	};
 
@@ -322,6 +224,43 @@ export default function ClientMealsPage(container, store, router) {
 			selectedDate = null;
 			weekMeals = [];
 			render();
+		}
+	}
+
+	// Function to import existing selections for this client
+	async function importClientSelections() {
+		try {
+			console.log("Importing selections for client:", clientId);
+
+			const response = await fetch(`${API_BASE_URL}/import-client-selections`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					clientId,
+				}),
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(
+					`Failed to import selections: ${response.status} - ${errorText}`
+				);
+			}
+
+			const result = await response.json();
+			console.log("Import result:", result);
+
+			alert(
+				`Successfully imported ${result.imported} meal selections for this client.`
+			);
+
+			// Reload the data
+			loadData();
+		} catch (error) {
+			console.error("Error importing client selections:", error);
+			alert(`Error importing selections: ${error.message}`);
 		}
 	}
 
@@ -360,32 +299,41 @@ export default function ClientMealsPage(container, store, router) {
 			);
 		}
 
-		console.log("Store state for selections:", store.state.selections);
-
-		// Get unique dates from selections and sort them
+		// Get unique dates from client selections and sort them
+		const clientSelections = store.state.clientSelections || [];
 		const dates = [];
 
-		// First try to get dates from the main selections data structure
-		if (store.state.selections && store.state.selections.length > 0) {
-			const selectionDates = store.state.selections[0]?.selections || [];
-			console.log("Selection dates from main structure:", selectionDates);
+		// Extract unique dates from client selections
+		clientSelections.forEach((selection) => {
+			if (selection.date) {
+				try {
+					// Format date as YYYY-MM-DD
+					const dateObj = new Date(selection.date);
+					const formattedDate = dateObj.toISOString().split("T")[0];
 
-			selectionDates.forEach((selection) => {
-				if (selection.date && selection.date !== "null") {
-					try {
-						const date = new Date(selection.date);
-						if (!isNaN(date.getTime())) {
-							// Format as YYYY-MM-DD
-							const formattedDate = date.toISOString().split("T")[0];
-							if (!dates.includes(formattedDate)) {
-								dates.push(formattedDate);
-							}
-						}
-					} catch (error) {
-						console.error("Error processing date:", selection.date);
+					if (!dates.includes(formattedDate)) {
+						dates.push(formattedDate);
 					}
+				} catch (err) {
+					console.error("Error parsing date:", selection.date);
 				}
-			});
+			}
+		});
+
+		// If no dates were found in client selections, check for available dates in meals
+		if (
+			dates.length === 0 &&
+			store.state.meals &&
+			store.state.meals.length > 0
+		) {
+			// Create dates for the next 7 days starting from today
+			const today = new Date();
+			for (let i = 0; i < 7; i++) {
+				const date = new Date(today);
+				date.setDate(today.getDate() + i);
+				const formattedDate = date.toISOString().split("T")[0];
+				dates.push(formattedDate);
+			}
 		}
 
 		// Sort dates chronologically
@@ -421,6 +369,9 @@ export default function ClientMealsPage(container, store, router) {
 									)
 									.join("")}
 							</select>
+							<button class="button button-secondary" onclick="window.importClientSelections()">
+								Import Existing Selections
+							</button>
 						</div>
 					</div>
 
@@ -520,6 +471,7 @@ export default function ClientMealsPage(container, store, router) {
 		window.handleDateSelect = handleDateSelect;
 		window.handleQuantityChange = handleQuantityChange;
 		window.navigateToClients = () => router.navigate("/clients");
+		window.importClientSelections = importClientSelections;
 	}
 
 	// Initial render
