@@ -94,75 +94,104 @@ export default function ClientMealsPage(container, store, router) {
 
 	// Load meals when a date is selected
 	async function loadDateMeals() {
-		if (!selectedDate) {
-			weekMeals = [];
-			render();
-			return;
-		}
+		console.log("Loading meals for date:", selectedDate);
+		const normalizedSelectedDate = new Date(selectedDate)
+			.toISOString()
+			.split("T")[0]; // YYYY-MM-DD
 
-		isLoading = true;
-		try {
-			// Get all meals as a fallback
-			const allMeals = store.state.meals || [];
-			let availableMeals = [];
+		// Initialize with empty array
+		weekMeals = [];
 
-			try {
-				// First try to fetch meals available for this specific date
-				const mealsResponse = await fetch(
-					`${API_BASE_URL}/meals?date=${selectedDate}`
-				);
-				if (mealsResponse.ok) {
-					availableMeals = await mealsResponse.json();
-					console.log(
-						`Available meals for date ${selectedDate}:`,
-						availableMeals
-					);
-				} else {
-					console.warn(
-						`Failed to fetch meals for date: ${mealsResponse.status}. Using all meals instead.`
-					);
-					// Fall back to using all available meals
-					availableMeals = allMeals;
+		// First check if we have selections for this date already in the local state
+		let foundSelections = false;
+		let clientSelections = [];
+
+		// Check selections collection
+		if (store.state.selections && store.state.selections.length > 0) {
+			store.state.selections.forEach((selectionDoc) => {
+				if (selectionDoc.selections && Array.isArray(selectionDoc.selections)) {
+					selectionDoc.selections.forEach((selection) => {
+						if (selection.date) {
+							const selDate = new Date(selection.date)
+								.toISOString()
+								.split("T")[0]; // YYYY-MM-DD
+							if (selDate === normalizedSelectedDate) {
+								clientSelections.push(selection);
+								foundSelections = true;
+							}
+						}
+					});
 				}
-			} catch (error) {
-				console.warn("Error fetching date-specific meals:", error);
-				// Fall back to using all available meals
-				availableMeals = allMeals;
-			}
-
-			// Fetch client-specific selections for this date
-			const response = await fetch(
-				`${API_BASE_URL}/client-selections?clientId=${clientId}&date=${selectedDate}`
-			);
-			if (!response.ok) {
-				throw new Error(
-					`Failed to fetch client selections: ${response.status}`
-				);
-			}
-
-			const clientSelections = await response.json();
-			console.log("Client selections for date:", clientSelections);
-
-			// Create a map of mealId to quantity
-			const mealQuantities = {};
-			clientSelections.forEach((selection) => {
-				mealQuantities[selection.mealId] = selection.quantity;
 			});
-
-			// Map the available meals with their quantities from the selections
-			weekMeals = availableMeals.map((meal) => ({
-				...meal,
-				quantity: mealQuantities[meal.id] || 0,
-			}));
-
-			console.log("Setting date meals:", weekMeals);
-		} catch (error) {
-			console.error("Failed to load date meals:", error);
-			weekMeals = [];
-		} finally {
-			isLoading = false;
-			render();
 		}
+
+		// Also check client selections
+		if (store.state.clientSelections) {
+			Object.values(store.state.clientSelections).forEach((selection) => {
+				if (selection.date) {
+					const selDate = new Date(selection.date).toISOString().split("T")[0]; // YYYY-MM-DD
+					if (selDate === normalizedSelectedDate) {
+						clientSelections.push(selection);
+						foundSelections = true;
+					}
+				}
+			});
+		}
+
+		// Log what we found in local state
+		console.log(
+			"Found selections in local state:",
+			foundSelections,
+			clientSelections
+		);
+
+		// Try to fetch meals from API regardless of local state
+		try {
+			const response = await store.getters.api.get(
+				`/client-meals?date=${normalizedSelectedDate}`
+			);
+
+			if (
+				response.data &&
+				response.data.meals &&
+				Array.isArray(response.data.meals)
+			) {
+				console.log("API returned meals:", response.data.meals);
+
+				// Process API meals and apply quantities from client selections
+				weekMeals = response.data.meals.map((meal) => {
+					const mealWithQuantity = { ...meal, quantity: 0 };
+
+					// Check if this meal exists in client selections and set quantity
+					if (foundSelections) {
+						clientSelections.forEach((selection) => {
+							if (selection.meals && Array.isArray(selection.meals)) {
+								selection.meals.forEach((selectedMeal) => {
+									if (
+										selectedMeal.id === meal.id ||
+										selectedMeal._id === meal._id
+									) {
+										mealWithQuantity.quantity = selectedMeal.quantity || 0;
+									}
+								});
+							}
+						});
+					}
+
+					return mealWithQuantity;
+				});
+			} else {
+				console.log("No meals found for date:", normalizedSelectedDate);
+			}
+		} catch (error) {
+			console.error(
+				"Error fetching meals for date:",
+				normalizedSelectedDate,
+				error
+			);
+		}
+
+		console.log("Final weekMeals:", weekMeals);
 	}
 
 	const handleQuantityChange = async (mealId, date, change) => {
@@ -446,6 +475,142 @@ export default function ClientMealsPage(container, store, router) {
 		}
 	}
 
+	// Get the active dates from the client's selections
+	function initDates() {
+		if (!dates || dates.length === 0) {
+			// First try to extract dates from selections
+			let extractedDates = [];
+
+			// Check for dates in the main selections collection
+			if (store.state.selections && store.state.selections.length > 0) {
+				console.log(
+					"Processing dates from selections collection:",
+					store.state.selections
+				);
+
+				// Try to extract dates from selections array
+				store.state.selections.forEach((selectionDoc) => {
+					if (
+						selectionDoc.selections &&
+						Array.isArray(selectionDoc.selections)
+					) {
+						selectionDoc.selections.forEach((selection) => {
+							if (selection.date) {
+								try {
+									// Handle MongoDB date format (can be string or object)
+									const dateObj = new Date(selection.date);
+									if (!isNaN(dateObj.getTime())) {
+										const dateStr = dateObj.toISOString().split("T")[0]; // YYYY-MM-DD
+										if (!extractedDates.includes(dateStr)) {
+											extractedDates.push(dateStr);
+										}
+									}
+								} catch (err) {
+									console.warn("Error parsing date from selection:", err);
+								}
+							}
+						});
+					}
+				});
+			}
+
+			console.log("Dates extracted from selections:", extractedDates);
+
+			// Then check client selections collection for any additional dates
+			if (store.state.clientSelections) {
+				console.log(
+					"Processing dates from client selections:",
+					store.state.clientSelections
+				);
+
+				Object.values(store.state.clientSelections).forEach(
+					(clientSelection) => {
+						if (clientSelection.date) {
+							try {
+								const dateObj = new Date(clientSelection.date);
+								if (!isNaN(dateObj.getTime())) {
+									const dateStr = dateObj.toISOString().split("T")[0]; // YYYY-MM-DD
+									if (!extractedDates.includes(dateStr)) {
+										extractedDates.push(dateStr);
+									}
+								}
+							} catch (err) {
+								console.warn("Error parsing date from client selection:", err);
+							}
+						}
+					}
+				);
+			}
+
+			// If no dates extracted, create defaults for the next 7 days
+			if (extractedDates.length === 0) {
+				console.log("No dates found in selections, creating default dates");
+
+				const today = new Date();
+				extractedDates = Array.from({ length: 7 }, (_, i) => {
+					const date = new Date(today);
+					date.setDate(today.getDate() + i);
+					return date.toISOString().split("T")[0]; // YYYY-MM-DD
+				});
+			}
+
+			// Sort dates chronologically
+			extractedDates.sort();
+			console.log("Final processed dates:", extractedDates);
+
+			dates = extractedDates;
+			selectedDate = dates[0]; // Select the first date by default
+		}
+	}
+
+	// Save or update the meal selections for a date
+	async function saveOrUpdateSelections() {
+		if (!selectedDate || weekMeals.length === 0) {
+			console.warn("Cannot save: No date selected or no meals available");
+			return;
+		}
+
+		const normalizedDate = new Date(selectedDate).toISOString().split("T")[0]; // YYYY-MM-DD
+		console.log("Saving selections for date:", normalizedDate);
+
+		// Filter out meals with zero quantity
+		const mealsWithQuantity = weekMeals.filter((meal) => meal.quantity > 0);
+		if (mealsWithQuantity.length === 0) {
+			console.warn("No meals selected (all quantities are 0)");
+			return;
+		}
+
+		// Create the selection object
+		const selection = {
+			date: normalizedDate,
+			meals: mealsWithQuantity.map((meal) => ({
+				id: meal.id || meal._id,
+				quantity: meal.quantity,
+				name: meal.name,
+			})),
+		};
+
+		// Store in local state first
+		if (!store.state.clientSelections) {
+			store.state.clientSelections = {};
+		}
+		store.state.clientSelections[normalizedDate] = selection;
+
+		// Send to API
+		try {
+			await store.getters.api.post("/client-selections", {
+				clientId: store.state.user.id,
+				date: normalizedDate,
+				selections: selection,
+			});
+
+			showNotification("Selections saved successfully!", "success");
+		} catch (error) {
+			console.error("Failed to save selections:", error);
+			showNotification("Failed to save selections. Please try again.", "error");
+		}
+	}
+
 	function render() {
 		console.log("Render called with state:", {
 			selectedDate,
@@ -485,7 +650,39 @@ export default function ClientMealsPage(container, store, router) {
 		const clientSelections = store.state.clientSelections || [];
 		const dates = [];
 
-		// Extract unique dates from client selections
+		// First get dates from the main selections collection
+		if (store.state.selections && store.state.selections.length > 0) {
+			const selectionDocument = store.state.selections[0];
+			if (selectionDocument && selectionDocument.selections) {
+				console.log(
+					"Processing dates from selections table:",
+					selectionDocument.selections
+				);
+
+				selectionDocument.selections.forEach((selection) => {
+					if (selection.date) {
+						try {
+							// Handle MongoDB date format which may be a Date object or a string
+							const dateObj = new Date(selection.date);
+							if (!isNaN(dateObj.getTime())) {
+								const formattedDate = dateObj.toISOString().split("T")[0];
+								if (!dates.includes(formattedDate)) {
+									dates.push(formattedDate);
+								}
+							}
+						} catch (err) {
+							console.error(
+								"Error parsing date from selections:",
+								selection.date,
+								err
+							);
+						}
+					}
+				});
+			}
+		}
+
+		// Then add dates from client selections if any were missed
 		clientSelections.forEach((selection) => {
 			if (selection.date) {
 				try {
@@ -497,12 +694,16 @@ export default function ClientMealsPage(container, store, router) {
 						dates.push(formattedDate);
 					}
 				} catch (err) {
-					console.error("Error parsing date:", selection.date);
+					console.error(
+						"Error parsing date from client selections:",
+						selection.date,
+						err
+					);
 				}
 			}
 		});
 
-		// If no dates were found in client selections, check for available dates in meals
+		// If no dates were found from either source, create some default dates
 		if (
 			dates.length === 0 &&
 			store.state.meals &&

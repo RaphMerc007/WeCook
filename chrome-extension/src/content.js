@@ -119,7 +119,44 @@ function extractMealData() {
 				}
 			}
 
+			// Try to extract meal ID from data attributes or other elements
+			let mealId = null;
+			try {
+				// Check for data attribute on the card
+				mealId =
+					card.getAttribute("data-meal-id") || card.getAttribute("data-id");
+
+				// If no ID found, look for it in button or link elements
+				if (!mealId) {
+					const idElements = card.querySelectorAll("[data-meal-id], [data-id]");
+					if (idElements.length > 0) {
+						mealId =
+							idElements[0].getAttribute("data-meal-id") ||
+							idElements[0].getAttribute("data-id");
+					}
+				}
+
+				// Look for ID in add-to-cart buttons
+				if (!mealId) {
+					const buttons = card.querySelectorAll("button");
+					buttons.forEach((button) => {
+						const onClick = button.getAttribute("onclick") || "";
+						if (onClick.includes("addToCart")) {
+							const match = onClick.match(/['"]([\w-]+)['"]/);
+							if (match && match[1]) {
+								mealId = match[1];
+							}
+						}
+					});
+				}
+
+				console.log("Extracted meal ID:", mealId);
+			} catch (error) {
+				console.error("Error extracting meal ID:", error);
+			}
+
 			const meal = {
+				id: mealId,
 				name: card
 					.querySelector("span.text-body-md.text-black.font-semibold")
 					?.textContent?.trim(),

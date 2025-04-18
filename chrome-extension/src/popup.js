@@ -174,6 +174,9 @@ document.addEventListener("DOMContentLoaded", function () {
 		console.log("[Popup] Import button clicked");
 		console.log("[Popup] Extracted date:", extractedDate);
 		try {
+			// Show status
+			showStatus("Importing meals and selections...", "progress");
+
 			// Generate unique IDs for meals that don't have them
 			const mealsWithIds = extractedMeals.map((meal) => ({
 				...meal,
@@ -198,7 +201,48 @@ document.addEventListener("DOMContentLoaded", function () {
 				}, {}),
 			};
 
-			console.log("[Popup] Sending data to API with date:", extractedDate);
+			// 1. First send the meals to the meals endpoint
+			console.log("[Popup] Sending meals to /meals API");
+			const mealsResponse = await fetch(
+				"https://wecook-production.up.railway.app/api/meals",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"Access-Control-Allow-Origin": "*",
+					},
+					credentials: "include",
+					mode: "cors",
+					body: JSON.stringify({
+						meals: mealsWithIds,
+						date: extractedDate,
+					}),
+				}
+			);
+
+			if (!mealsResponse.ok) {
+				console.error(
+					"[Popup] Failed to import meals:",
+					await mealsResponse.text()
+				);
+				showStatus(
+					"Failed to import meals. Skipping selections import.",
+					"error"
+				);
+				return;
+			}
+
+			console.log("[Popup] Meals import successful");
+			showStatus(
+				"Meals imported successfully! Importing selections...",
+				"success"
+			);
+
+			// 2. Then send the selections
+			console.log(
+				"[Popup] Sending data to selections API with date:",
+				extractedDate
+			);
 			const response = await fetch(
 				"https://wecook-production.up.railway.app/api/selections",
 				{
@@ -236,10 +280,73 @@ document.addEventListener("DOMContentLoaded", function () {
 
 			if (response.ok) {
 				console.log("[Popup] Import successful with date:", extractedDate);
-				showStatus("Import successful!", "success");
+				showStatus(
+					"Import successful! Meals and selections have been imported.",
+					"success"
+				);
+
+				// 3. Run the extract meals API to ensure meal IDs are properly processed
+				try {
+					console.log("[Popup] Running extract-meals-from-selections API");
+					const extractResponse = await fetch(
+						"https://wecook-production.up.railway.app/api/extract-meals-from-selections",
+						{
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+								"Access-Control-Allow-Origin": "*",
+							},
+							credentials: "include",
+							mode: "cors",
+						}
+					);
+
+					if (extractResponse.ok) {
+						console.log("[Popup] Extract meals successful");
+					} else {
+						console.error(
+							"[Popup] Extract meals failed:",
+							await extractResponse.text()
+						);
+					}
+				} catch (extractError) {
+					console.error("[Popup] Error running extract-meals:", extractError);
+				}
+
+				// 4. Run the fix-selections API to ensure dates are properly set
+				try {
+					console.log("[Popup] Running fix-selections API");
+					const fixResponse = await fetch(
+						"https://wecook-production.up.railway.app/api/fix-selections",
+						{
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+								"Access-Control-Allow-Origin": "*",
+							},
+							credentials: "include",
+							mode: "cors",
+						}
+					);
+
+					if (fixResponse.ok) {
+						console.log("[Popup] Fix selections successful");
+					} else {
+						console.error(
+							"[Popup] Fix selections failed:",
+							await fixResponse.text()
+						);
+					}
+				} catch (fixError) {
+					console.error("[Popup] Error running fix-selections:", fixError);
+				}
 			} else {
 				console.log("[Popup] Import failed with date:", extractedDate);
-				showStatus("Import failed.", "error");
+				const errorText = await response.text();
+				showStatus(
+					`Import partially successful. Meals were imported but selections failed: ${errorText}`,
+					"error"
+				);
 			}
 		} catch (error) {
 			console.error("[Popup] Error importing meals:", error);
