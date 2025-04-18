@@ -516,6 +516,47 @@ apiRouter.get("/meals", async (req: Request, res: Response) => {
 	}
 });
 
+// Client meals endpoint
+apiRouter.get("/client-meals", async (req: Request, res: Response) => {
+	try {
+		console.log("=== GET /client-meals Debug Log ===");
+		console.log("Query parameters:", req.query);
+		const { date } = req.query;
+
+		if (!date) {
+			return res.status(400).json({ error: "Date parameter is required" });
+		}
+
+		// Get all meals from database
+		const allMeals = await MealModel.find();
+
+		// Generate IDs for meals without IDs
+		const mealsWithIds = allMeals.map((meal) => {
+			if (meal.id) return meal;
+
+			// Create ID based on name with hyphens and a random string
+			const nameSlug = meal.name.toLowerCase().replace(/\s+/g, "-");
+			const randomId = Math.random().toString(36).substring(7);
+			return {
+				...meal.toObject(),
+				id: `${nameSlug}-${randomId}`,
+			};
+		});
+
+		// Return the response with all meals and the requested date
+		return res.json({
+			success: true,
+			data: {
+				meals: mealsWithIds,
+				selectedDate: date,
+			},
+		});
+	} catch (error) {
+		console.error("Error in GET /client-meals:", error);
+		res.status(500).json({ error: "Failed to fetch client meals" });
+	}
+});
+
 // Import meals
 apiRouter.post("/meals", async (req: Request, res: Response) => {
 	try {
@@ -657,8 +698,56 @@ apiRouter.get(
 // Add or update a client selection
 apiRouter.post("/client-selections", async (req: Request, res: Response) => {
 	try {
-		const { clientId, date, mealId, quantity } = req.body;
+		const { clientId, date, mealId, quantity, selections } = req.body;
 
+		// Handle case where selections object is provided
+		if (selections) {
+			console.log("Processing selections object:", selections);
+
+			// Use date from selections object if provided, or fallback to the date in the request
+			const selectionDate = selections.date || date;
+
+			if (!clientId || !selectionDate) {
+				return res
+					.status(400)
+					.json({ error: "Missing required fields (clientId or date)" });
+			}
+
+			// Format date to ensure consistency
+			const formattedDate = new Date(selectionDate);
+
+			if (selections.meals && Array.isArray(selections.meals)) {
+				// Create or update multiple meal selections
+				const results = await Promise.all(
+					selections.meals.map(
+						async (meal: { id?: string; quantity?: number | string }) => {
+							if (!meal.id) {
+								return null; // Skip meals without ID
+							}
+
+							return await ClientMealSelectionModel.findOneAndUpdate(
+								{ clientId, date: formattedDate, mealId: meal.id },
+								{ quantity: Math.max(0, Number(meal.quantity) || 0) },
+								{ upsert: true, new: true }
+							);
+						}
+					)
+				);
+
+				// Filter out null results
+				const validResults = results.filter((result) => result !== null);
+
+				return res.json({
+					message: "Multiple selections updated",
+					count: validResults.length,
+					results: validResults,
+				});
+			}
+
+			return res.status(400).json({ error: "Invalid selections format" });
+		}
+
+		// Handle simple case with direct mealId and quantity
 		if (!clientId || !date || !mealId) {
 			return res.status(400).json({ error: "Missing required fields" });
 		}
