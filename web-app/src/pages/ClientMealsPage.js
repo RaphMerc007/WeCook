@@ -58,8 +58,13 @@ export default function ClientMealsPage(container, store, router) {
 			availableDates = datesData.dates || [];
 			console.log("Available dates from database:", availableDates);
 
-			// Set default selected date to the first available date
-			if (availableDates.length > 0 && !selectedDate) {
+			// If no dates available, use today's date
+			if (availableDates.length === 0) {
+				const today = new Date();
+				selectedDate = today.toISOString().split("T")[0];
+				availableDates = [selectedDate];
+			} else if (!selectedDate) {
+				// If dates are available but none selected, use the first available date
 				selectedDate = availableDates[0];
 			}
 
@@ -70,10 +75,8 @@ export default function ClientMealsPage(container, store, router) {
 			const clientSelections = await response.json();
 			console.log("Client selections for this client:", clientSelections);
 
-			// If a date is already selected, load meals for that date
-			if (selectedDate) {
-				await loadDateMeals();
-			}
+			// Load meals for the selected date
+			await loadDateMeals();
 
 			isLoading = false;
 			render();

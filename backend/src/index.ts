@@ -531,30 +531,47 @@ apiRouter.get("/available-dates", async (req: Request, res: Response) => {
 
 		// Get all unique dates from ClientMealSelectionModel
 		const selections = await ClientMealSelectionModel.find(query);
+		console.log("Found selections:", selections);
 
 		// Extract and format dates to YYYY-MM-DD
 		const uniqueDates = new Set<string>();
 
-		console.log("!!!!!!!!!!!!!!!Selections:", selections);
 		selections.forEach((selection) => {
+			if (!selection.date) {
+				console.log("Selection without date:", selection);
+				return;
+			}
 			const dateObj = new Date(selection.date);
+			if (isNaN(dateObj.getTime())) {
+				console.log("Invalid date in selection:", selection);
+				return;
+			}
 			const formattedDate = dateObj.toISOString().split("T")[0]; // YYYY-MM-DD
 			uniqueDates.add(formattedDate);
+			console.log("Added date:", formattedDate);
 		});
 
-		// If no dates found, return dates for the next 7 days
+		// If no dates found, add today's date
 		if (uniqueDates.size === 0) {
 			const today = new Date();
-			for (let i = 0; i < 7; i++) {
-				const date = new Date(today);
-				date.setDate(today.getDate() + i);
-				const formattedDate = date.toISOString().split("T")[0]; // YYYY-MM-DD
-				uniqueDates.add(formattedDate);
-			}
+			const formattedToday = today.toISOString().split("T")[0];
+			uniqueDates.add(formattedToday);
+			console.log("No dates found, added today:", formattedToday);
+
+			// Create a default selection for today
+			const defaultSelection = new ClientMealSelectionModel({
+				clientId,
+				date: today,
+				mealId: "default",
+				quantity: 0,
+			});
+			await defaultSelection.save();
+			console.log("Created default selection:", defaultSelection);
 		}
 
 		// Convert to array and sort
 		const dateArray = Array.from(uniqueDates).sort();
+		console.log("Final dates array:", dateArray);
 
 		res.json({
 			success: true,
@@ -595,6 +612,18 @@ apiRouter.get("/clients/:clientId", async (req: Request, res: Response) => {
 	} catch (error) {
 		console.error("Error fetching client details:", error);
 		res.status(500).json({ error: "Failed to fetch client details" });
+	}
+});
+
+// Get all clients
+apiRouter.get("/clients", async (req: Request, res: Response) => {
+	try {
+		console.log("Fetching all clients");
+		const clients = await ClientModel.find();
+		res.json(clients);
+	} catch (error) {
+		console.error("Error fetching all clients:", error);
+		res.status(500).json({ error: "Failed to fetch clients" });
 	}
 });
 
