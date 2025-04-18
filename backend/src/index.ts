@@ -553,6 +553,7 @@ apiRouter.get("/client-meals", async (req: Request, res: Response) => {
 		// Format the date consistently
 		const formattedDate = new Date(date as string).toISOString().split("T")[0];
 
+		// Return in the format expected by the client code
 		return res.json({
 			success: true,
 			meals: mealsWithIds,
@@ -699,13 +700,49 @@ apiRouter.get(
 			// Use the ID field instead of clientId
 			const client = await ClientMealSelectionModel.findOne({ id: clientId });
 
+			// If no client exists with this ID, return an empty array for backward compatibility
 			if (!client) {
-				// If no client exists with this ID, return an empty object
-				return res.json({});
+				return res.json([]);
 			}
 
-			// Return the entire client document
-			res.json(client);
+			// For backward compatibility, transform into an array format expected by the client
+			// Each item in the array represents a meal selection with date, mealId, and quantity
+			interface DateSelection {
+				clientId: string;
+				date: string;
+				meals: Array<{ id: string; quantity: number }>;
+			}
+
+			const backwardCompatibleFormat: DateSelection[] = [];
+
+			if (client.selectedMeals && client.selectedMeals.length > 0) {
+				// Group by date for easier client-side processing
+				const selectionsByDate: Record<string, DateSelection> = {};
+
+				// Group selections by date
+				client.selectedMeals.forEach((meal) => {
+					if (!selectionsByDate[meal.date]) {
+						selectionsByDate[meal.date] = {
+							clientId: client.id,
+							date: meal.date,
+							meals: [],
+						};
+					}
+
+					selectionsByDate[meal.date].meals.push({
+						id: meal.mealId,
+						quantity: meal.quantity,
+					});
+				});
+
+				// Convert grouped selections to array
+				Object.values(selectionsByDate).forEach((dateSelection) => {
+					backwardCompatibleFormat.push(dateSelection);
+				});
+			}
+
+			// Return the array format
+			res.json(backwardCompatibleFormat);
 		} catch (error) {
 			console.error("Error fetching client selections:", error);
 			res.status(500).json({ error: "Failed to fetch client selections" });
