@@ -20,6 +20,9 @@ export default function ClientMealsPage(container, store, router) {
 			const mainDocument = data[0];
 			console.log("Main document:", mainDocument);
 
+			// Store the selections data in the store for access in render
+			store.setState({ selections: data });
+
 			// Get client's selections from the main document
 			const clientSelections =
 				mainDocument?.selections?.flatMap((selection) => {
@@ -337,28 +340,36 @@ export default function ClientMealsPage(container, store, router) {
 			0
 		);
 
+		console.log("Store state for selections:", store.state.selections);
+
 		// Get unique dates from selections and sort them
-		const dates = (store.state.selections || [])
-			.filter((s) => s.date && s.date !== "null") // Explicitly filter out "null" string values
-			.map((s) => {
-				try {
-					// Parse the date string, ensuring it's a valid date
-					const date = new Date(s.date);
-					if (isNaN(date.getTime())) {
-						console.warn("Invalid date found:", s.date);
-						return null;
+		const dates = [];
+
+		// First try to get dates from the main selections data structure
+		if (store.state.selections && store.state.selections.length > 0) {
+			const selectionDates = store.state.selections[0]?.selections || [];
+			console.log("Selection dates from main structure:", selectionDates);
+
+			selectionDates.forEach((selection) => {
+				if (selection.date && selection.date !== "null") {
+					try {
+						const date = new Date(selection.date);
+						if (!isNaN(date.getTime())) {
+							// Format as YYYY-MM-DD
+							const formattedDate = date.toISOString().split("T")[0];
+							if (!dates.includes(formattedDate)) {
+								dates.push(formattedDate);
+							}
+						}
+					} catch (error) {
+						console.error("Error processing date:", selection.date);
 					}
-					// Adjust for timezone and convert to YYYY-MM-DD format
-					date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-					return date.toISOString().split("T")[0];
-				} catch (error) {
-					console.error("Error parsing date:", s.date, error);
-					return null;
 				}
-			})
-			.filter((date) => date !== null)
-			.filter((date, index, self) => self.indexOf(date) === index)
-			.sort();
+			});
+		}
+
+		// Sort dates chronologically
+		dates.sort();
 
 		console.log("Processed dates for dropdown:", dates);
 
