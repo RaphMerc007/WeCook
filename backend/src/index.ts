@@ -885,99 +885,86 @@ apiRouter.post("/fix-selections", async (req: Request, res: Response) => {
 	}
 });
 
-// Generate placeholder meals from selections data
+// Extract meals from selections and create placeholders
 apiRouter.post(
-	"/generate-placeholder-meals",
+	"/extract-meals-from-selections",
 	async (req: Request, res: Response) => {
 		try {
-			console.log("Generating placeholder meals from selections data...");
+			console.log("Extracting meals from selections...");
 
-			// Get the current selections
+			// Get current selections
 			const selections = await SelectionsModel.findOne();
-
 			if (!selections) {
 				return res.status(404).json({ error: "No selections found" });
 			}
 
-			// Extract all meal IDs from all selections
+			// Extract all meal IDs from selections
 			const mealIds = new Set<string>();
 
 			selections.selections.forEach((selection: any) => {
 				if (selection.meals) {
-					Object.entries(selection.meals).forEach(
-						([mealId, quantity]: [string, any]) => {
-							// Skip invalid keys and entries with 0 quantity
-							if (mealId !== "meals" && mealId !== "date" && quantity > 0) {
-								mealIds.add(mealId);
-							}
+					Object.keys(selection.meals).forEach((mealId) => {
+						// Skip invalid keys
+						if (mealId !== "meals" && mealId !== "date" && mealId.length > 0) {
+							mealIds.add(mealId);
 						}
-					);
+					});
 				}
 			});
 
-			console.log(`Found ${mealIds.size} unique meal IDs in selections data`);
+			console.log(`Found ${mealIds.size} unique meal IDs in selections`);
 
-			// Check if any of these meals already exist
+			// Check which meals already exist
 			const existingMeals = await MealModel.find({
 				id: { $in: Array.from(mealIds) },
 			});
 			const existingMealIds = new Set(existingMeals.map((meal) => meal.id));
 
-			console.log(`Found ${existingMeals.length} existing meals`);
+			console.log(`${existingMeals.length} meals already exist in database`);
 
-			// Create placeholder meals for IDs that don't exist yet
-			const newMeals = [];
-			for (const mealId of mealIds) {
-				if (!existingMealIds.has(mealId)) {
-					// Extract a readable name from the ID
-					let name = mealId;
+			// Create placeholders for missing meals
+			const missingMealIds = Array.from(mealIds).filter(
+				(id) => !existingMealIds.has(id)
+			);
+			console.log(`Creating ${missingMealIds.length} placeholder meals`);
 
-					// Try to extract a readable name from the ID format like "meal-name-timestamp-randomchars"
-					const parts = mealId.split("-");
-					if (parts.length > 3) {
-						// Remove the timestamp and random chars
-						name = parts.slice(0, -2).join(" ");
-					}
-
-					// Format the name with proper capitalization
-					name = name
-						.replace(/-/g, " ")
-						.split(" ")
-						.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-						.join(" ");
-
-					// Create a new placeholder meal
-					const newMeal = {
-						id: mealId,
-						name: name,
-						imageUrl: "placeholder.jpg",
-						category: "Regular",
-						price: 0,
-						hasSideDish: false,
-						sideDishes: [],
-					};
-
-					newMeals.push(newMeal);
+			const placeholderMeals = missingMealIds.map((id) => {
+				// Extract a potential name from the ID by removing the timestamp and hash
+				let name = id.split("-").slice(0, -2).join(" ");
+				// If name is empty or just whitespace, use the ID
+				if (!name.trim()) {
+					name = `Meal ${id.substring(0, 8)}`;
 				}
-			}
 
-			console.log(`Creating ${newMeals.length} new placeholder meals`);
+				return {
+					id,
+					name: name.charAt(0).toUpperCase() + name.slice(1), // Capitalize first letter
+					imageUrl: "placeholder.jpg",
+					category: "Regular",
+					price: 0,
+					hasSideDish: false,
+					sideDishes: [],
+				};
+			});
 
-			// Save the new meals to the database
-			if (newMeals.length > 0) {
-				await MealModel.insertMany(newMeals);
+			// Save placeholder meals
+			let savedMeals: any[] = [];
+			if (placeholderMeals.length > 0) {
+				savedMeals = await MealModel.insertMany(placeholderMeals);
 			}
 
 			res.json({
-				message: "Placeholder meals generated successfully",
+				message: "Meals extracted and placeholders created",
 				totalMealIds: mealIds.size,
 				existingMeals: existingMeals.length,
-				newMealsCreated: newMeals.length,
-				mealsList: newMeals,
+				createdPlaceholders: savedMeals.length,
+				mealIds: Array.from(mealIds),
 			});
 		} catch (error) {
-			console.error("Error generating placeholder meals:", error);
-			res.status(500).json({ error: "Failed to generate placeholder meals" });
+			console.error("Error extracting meals:", error);
+			res
+				.status(500)
+				.json({ error: "Failed to extract meals from selections" });
 		}
 	}
 );

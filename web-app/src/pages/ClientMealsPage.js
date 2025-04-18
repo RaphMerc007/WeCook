@@ -377,38 +377,38 @@ export default function ClientMealsPage(container, store, router) {
 		}
 	}
 
-	// Function to generate placeholder meals
-	async function generatePlaceholderMeals() {
+	// Function to extract meals from selections
+	async function extractMealsFromSelections() {
 		try {
 			// Show a confirmation dialog
 			if (
 				!confirm(
-					"This will generate placeholder meals from the selections data. Are you sure?"
+					"This will extract meal IDs from selections and create placeholder meals. Continue?"
 				)
 			) {
 				return;
 			}
 
 			// Create a temporary loading indicator
-			const generateButton = document.querySelector(
-				'[onclick="window.generatePlaceholderMeals()"]'
+			const extractButton = document.querySelector(
+				'[onclick="window.extractMealsFromSelections()"]'
 			);
-			if (generateButton) {
-				const originalText = generateButton.textContent;
-				generateButton.textContent = "Generating...";
-				generateButton.disabled = true;
+			if (extractButton) {
+				const originalText = extractButton.textContent;
+				extractButton.textContent = "Extracting...";
+				extractButton.disabled = true;
 
 				// Restore button after 5 seconds in case of silent failure
 				setTimeout(() => {
-					generateButton.textContent = originalText;
-					generateButton.disabled = false;
+					extractButton.textContent = originalText;
+					extractButton.disabled = false;
 				}, 5000);
 			}
 
-			console.log("Generating placeholder meals...");
+			console.log("Extracting meals from selections...");
 
 			const response = await fetch(
-				`${API_BASE_URL}/generate-placeholder-meals`,
+				`${API_BASE_URL}/extract-meals-from-selections`,
 				{
 					method: "POST",
 					headers: {
@@ -418,30 +418,31 @@ export default function ClientMealsPage(container, store, router) {
 			);
 
 			// Reset the button regardless of outcome
-			if (generateButton) {
-				generateButton.textContent = "Generate Placeholder Meals";
-				generateButton.disabled = false;
+			if (extractButton) {
+				extractButton.textContent = "Extract Meals";
+				extractButton.disabled = false;
 			}
 
 			if (!response.ok) {
 				const errorText = await response.text();
 				throw new Error(
-					`Failed to generate meals: ${response.status} - ${errorText}`
+					`Failed to extract meals: ${response.status} - ${errorText}`
 				);
 			}
 
 			const result = await response.json();
-			console.log("Generation result:", result);
+			console.log("Extract result:", result);
 
-			alert(
-				`Successfully generated ${result.newMealsCreated} placeholder meals from the selections data.`
-			);
+			alert(`Meal extraction complete:
+- Total meal IDs found: ${result.totalMealIds}
+- Existing meals: ${result.existingMeals}
+- Created placeholders: ${result.createdPlaceholders}`);
 
 			// Reload the page to reflect changes
 			window.location.reload();
 		} catch (error) {
-			console.error("Error generating placeholder meals:", error);
-			alert(`Error generating placeholder meals: ${error.message}`);
+			console.error("Error extracting meals:", error);
+			alert(`Error extracting meals: ${error.message}`);
 		}
 	}
 
@@ -553,17 +554,16 @@ export default function ClientMealsPage(container, store, router) {
 							<button class="button button-secondary" onclick="window.importClientSelections()">
 								Import Existing Selections
 							</button>
+							<!-- Admin buttons -->
+							<div style="margin-left: auto; display: flex; gap: 8px;">
+								<button class="button button-warning" onclick="window.extractMealsFromSelections()">
+									Extract Meals
+								</button>
+								<button class="button button-danger" onclick="window.fixSelectionsData()">
+									Fix Selections Data
+								</button>
+							</div>
 						</div>
-					</div>
-
-					<!-- Admin controls -->
-					<div class="group" style="justify-content: flex-end; margin-bottom: 20px;">
-						<button class="button button-secondary" onclick="window.generatePlaceholderMeals()">
-							Generate Placeholder Meals
-						</button>
-						<button class="button button-danger" onclick="window.fixSelectionsData()">
-							Fix Selections Data
-						</button>
 					</div>
 
 					${isLoading ? "<p>Loading...</p>" : ""}
@@ -670,7 +670,7 @@ export default function ClientMealsPage(container, store, router) {
 		window.navigateToClients = () => router.navigate("/clients");
 		window.importClientSelections = importClientSelections;
 		window.fixSelectionsData = fixSelectionsData;
-		window.generatePlaceholderMeals = generatePlaceholderMeals;
+		window.extractMealsFromSelections = extractMealsFromSelections;
 	}
 
 	// Initial render
