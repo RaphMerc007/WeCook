@@ -615,6 +615,51 @@ apiRouter.get("/clients/:clientId", async (req: Request, res: Response) => {
 	}
 });
 
+// Update client by ID
+apiRouter.put("/clients/:clientId", async (req: Request, res: Response) => {
+	try {
+		console.log("Updating client:", req.params.clientId);
+		console.log("Update data:", req.body);
+
+		const { clientId } = req.params;
+		const updateData = req.body;
+
+		// Validate required fields
+		if (!updateData.name) {
+			return res.status(400).json({ error: "Name is required" });
+		}
+		if (
+			typeof updateData.mealsPerWeek !== "number" ||
+			updateData.mealsPerWeek < 1
+		) {
+			return res
+				.status(400)
+				.json({ error: "Meals per week must be a positive number" });
+		}
+
+		// Update the client
+		const updatedClient = await ClientModel.findOneAndUpdate(
+			{ id: clientId },
+			{
+				...updateData,
+				updatedAt: new Date(),
+			},
+			{ new: true }
+		);
+
+		if (!updatedClient) {
+			console.log("Client not found for update:", clientId);
+			return res.status(404).json({ error: "Client not found" });
+		}
+
+		console.log("Client updated successfully:", updatedClient);
+		res.json(updatedClient);
+	} catch (error) {
+		console.error("Error updating client:", error);
+		res.status(500).json({ error: "Failed to update client" });
+	}
+});
+
 // Get all clients
 apiRouter.get("/clients", async (req: Request, res: Response) => {
 	try {
