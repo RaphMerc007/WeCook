@@ -734,6 +734,7 @@ apiRouter.post("/client-selections", async (req: Request, res: Response) => {
 		// Find existing client or create a new one
 		let client = await ClientMealSelectionModel.findOne({ id: clientId });
 
+		// If client doesn't exist, create a new one
 		if (!client) {
 			// Create a new client if not found
 			if (!name) {
@@ -745,66 +746,92 @@ apiRouter.post("/client-selections", async (req: Request, res: Response) => {
 			// Default mealsPerWeek to 0 if not provided
 			const clientMealsPerWeek = mealsPerWeek || 0;
 
+			// Create initial client document
 			client = new ClientMealSelectionModel({
 				id: clientId,
 				name,
 				mealsPerWeek: clientMealsPerWeek,
 				selectedMeals: [],
 			});
+
+			await client.save();
 		}
 
 		// Handle full selectedMeals array if provided
 		if (selectedMeals && Array.isArray(selectedMeals)) {
-			// Replace the entire selectedMeals array
-			client.set("selectedMeals", selectedMeals);
+			// Directly update with MongoDB operator
+			await ClientMealSelectionModel.updateOne(
+				{ id: clientId },
+				{
+					$set: {
+						selectedMeals: selectedMeals,
+						updatedAt: new Date(),
+					},
+				}
+			);
+
+			// Fetch the updated client
+			client = await ClientMealSelectionModel.findOne({ id: clientId });
 		}
 		// Handle adding/updating a single meal selection
 		else if (date && mealId) {
 			// Format date to ensure consistency (YYYY-MM-DD)
 			const formattedDate = new Date(date).toISOString().split("T")[0];
 
-			// Get and convert the selectedMeals array
-			const currentMeals = client.get("selectedMeals") || [];
-
-			// Find the meal in the client's selectedMeals array
-			const existingMealIndex = currentMeals.findIndex(
-				(meal: MealSelection) =>
-					meal.mealId === mealId && meal.date === formattedDate
-			);
-
 			// Validate quantity is a number and at least 0
 			const validatedQuantity = Math.max(0, Number(quantity) || 0);
 
-			// Create a new array to avoid modifying the original directly
-			const updatedMeals = [...currentMeals];
+			if (validatedQuantity === 0) {
+				// Remove the meal if quantity is 0
+				await ClientMealSelectionModel.updateOne(
+					{ id: clientId },
+					{
+						$pull: {
+							selectedMeals: {
+								mealId: mealId,
+								date: formattedDate,
+							},
+						},
+						$set: { updatedAt: new Date() },
+					}
+				);
+			} else {
+				// First try to update existing
+				const updateResult = await ClientMealSelectionModel.updateOne(
+					{
+						id: clientId,
+						"selectedMeals.mealId": mealId,
+						"selectedMeals.date": formattedDate,
+					},
+					{
+						$set: {
+							"selectedMeals.$.quantity": validatedQuantity,
+							updatedAt: new Date(),
+						},
+					}
+				);
 
-			if (existingMealIndex >= 0) {
-				// Update existing meal
-				if (validatedQuantity === 0) {
-					// Remove the meal if quantity is 0
-					updatedMeals.splice(existingMealIndex, 1);
-				} else {
-					// Update the quantity
-					updatedMeals[existingMealIndex].quantity = validatedQuantity;
+				// If no document was updated, add new meal selection
+				if (updateResult.matchedCount === 0) {
+					await ClientMealSelectionModel.updateOne(
+						{ id: clientId },
+						{
+							$push: {
+								selectedMeals: {
+									mealId,
+									date: formattedDate,
+									quantity: validatedQuantity,
+								},
+							},
+							$set: { updatedAt: new Date() },
+						}
+					);
 				}
-			} else if (validatedQuantity > 0) {
-				// Add new meal if it doesn't exist and quantity > 0
-				updatedMeals.push({
-					mealId,
-					date: formattedDate,
-					quantity: validatedQuantity,
-				});
 			}
 
-			// Set the updated meals array
-			client.set("selectedMeals", updatedMeals);
+			// Fetch the updated client
+			client = await ClientMealSelectionModel.findOne({ id: clientId });
 		}
-
-		// Update the updatedAt timestamp
-		client.set("updatedAt", new Date());
-
-		// Save the updated client
-		await client.save();
 
 		res.json(client);
 	} catch (error) {
@@ -822,31 +849,27 @@ apiRouter.delete("/client-selections", async (req: Request, res: Response) => {
 			return res.status(400).json({ error: "Client ID is required" });
 		}
 
-		// Find the client
+		// If no specific date or mealId, delete the entire client record
+		if (!date && !mealId) {
+			const result = await ClientMealSelectionModel.deleteOne({ id: clientId });
+			return res.json({
+				message: "Client deleted successfully",
+				deletedCount: result.deletedCount || 0,
+			});
+		}
+
+		// Find the client first to get the original count for reporting
 		const client = await ClientMealSelectionModel.findOne({ id: clientId });
 
 		if (!client) {
 			return res.status(404).json({ error: "Client not found" });
 		}
 
-		// If no specific date or mealId, delete the entire client record
-		if (!date && !mealId) {
-			await ClientMealSelectionModel.deleteOne({ id: clientId });
-			return res.json({
-				message: "Client deleted successfully",
-				deletedCount: 1,
-			});
-		}
-
-		// Initialize delete count
-		let deletedCount = 0;
-
-		// Get the current meals array
-		const currentMeals = client.get("selectedMeals") || [];
-		const originalLength = currentMeals.length;
-
-		// Create a filtered array based on the criteria
-		let updatedMeals = [...currentMeals];
+		// Store the original count for calculating deletedCount
+		const originalCount = client.selectedMeals
+			? client.selectedMeals.length
+			: 0;
+		let result;
 
 		// If date provided, filter by date
 		if (date) {
@@ -855,36 +878,58 @@ apiRouter.delete("/client-selections", async (req: Request, res: Response) => {
 
 			// If mealId also provided, remove specific meal for that date
 			if (mealId) {
-				updatedMeals = updatedMeals.filter(
-					(meal: MealSelection) =>
-						!(meal.date === formattedDate && meal.mealId === mealId)
+				result = await ClientMealSelectionModel.updateOne(
+					{ id: clientId },
+					{
+						$pull: {
+							selectedMeals: {
+								mealId: mealId,
+								date: formattedDate,
+							},
+						},
+						$set: { updatedAt: new Date() },
+					}
 				);
 			}
 			// Otherwise, remove all meals for that date
 			else {
-				updatedMeals = updatedMeals.filter(
-					(meal: MealSelection) => meal.date !== formattedDate
+				result = await ClientMealSelectionModel.updateOne(
+					{ id: clientId },
+					{
+						$pull: {
+							selectedMeals: {
+								date: formattedDate,
+							},
+						},
+						$set: { updatedAt: new Date() },
+					}
 				);
 			}
 		}
 		// If only mealId provided, remove all occurrences of that meal
 		else if (mealId) {
-			updatedMeals = updatedMeals.filter(
-				(meal: MealSelection) => meal.mealId !== mealId
+			result = await ClientMealSelectionModel.updateOne(
+				{ id: clientId },
+				{
+					$pull: {
+						selectedMeals: {
+							mealId: mealId,
+						},
+					},
+					$set: { updatedAt: new Date() },
+				}
 			);
 		}
 
-		// Calculate how many items were removed
-		deletedCount = originalLength - updatedMeals.length;
-
-		// Set the updated meals array
-		client.set("selectedMeals", updatedMeals);
-
-		// Update the updatedAt timestamp
-		client.set("updatedAt", new Date());
-
-		// Save the updated client
-		await client.save();
+		// Fetch the updated client to calculate how many items were deleted
+		const updatedClient = await ClientMealSelectionModel.findOne({
+			id: clientId,
+		});
+		const updatedCount =
+			updatedClient && updatedClient.selectedMeals
+				? updatedClient.selectedMeals.length
+				: 0;
+		const deletedCount = originalCount - updatedCount;
 
 		res.json({
 			message: "Client selections deleted successfully",
@@ -934,20 +979,22 @@ apiRouter.post(
 					mealsPerWeek: 0,
 					selectedMeals: [],
 				});
+				await client.save();
 			}
 
 			// Track existing meal-date combinations to avoid duplicates
-			const importedMeals: Array<{
+			const mealSet = new Set<string>();
+			const importedSelections: Array<{
 				mealId: string;
 				date: string;
 				quantity: number;
 			}> = [];
-			const existingMeals = client.get("selectedMeals") || [];
-			const mealSet = new Set<string>();
 
-			// Track existing meal-date combinations
-			for (const meal of existingMeals) {
-				mealSet.add(`${meal.mealId}-${meal.date}`);
+			// Get existing meal-date combinations
+			if (client.selectedMeals) {
+				client.selectedMeals.forEach((meal: any) => {
+					mealSet.add(`${meal.mealId}-${meal.date}`);
+				});
 			}
 
 			// Process each week selection
@@ -972,8 +1019,8 @@ apiRouter.post(
 						const mealKey = `${mealId}-${formattedDate}`;
 
 						if (!mealSet.has(mealKey)) {
-							// Add to our temporary array
-							importedMeals.push({
+							// Add to our import collection
+							importedSelections.push({
 								mealId,
 								date: formattedDate,
 								quantity: Number(quantity),
@@ -995,16 +1042,20 @@ apiRouter.post(
 				}
 			}
 
-			// Update the client with the imported meals by pushing each one
-			for (const meal of importedMeals) {
-				(client.selectedMeals as any).push(meal);
+			// Update the client with the imported meals using MongoDB operator
+			if (importedSelections.length > 0) {
+				await ClientMealSelectionModel.updateOne(
+					{ id: clientId },
+					{
+						$push: {
+							selectedMeals: {
+								$each: importedSelections,
+							},
+						},
+						$set: { updatedAt: new Date() },
+					}
+				);
 			}
-
-			// Update the timestamp
-			client.set("updatedAt", new Date());
-
-			// Save the updated client
-			await client.save();
 
 			res.json({
 				message: "Import completed",
