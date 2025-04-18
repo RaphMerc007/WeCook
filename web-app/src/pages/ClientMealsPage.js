@@ -172,7 +172,15 @@ export default function ClientMealsPage(container, store, router) {
 
 			// Get current selections
 			const response = await fetch(`${API_BASE_URL}/selections`);
+			if (!response.ok) {
+				throw new Error(
+					`Failed to fetch selections: ${response.status} ${response.statusText}`
+				);
+			}
+
 			const data = await response.json();
+			console.log("Current selections data:", data);
+
 			const mainDocument = data[0] || {
 				totalWeeks: 1,
 				selections: [],
@@ -192,7 +200,7 @@ export default function ClientMealsPage(container, store, router) {
 			}
 
 			// Find or create client selection
-			let clientSelection = selection.clients.find(
+			let clientSelection = selection.clients?.find(
 				(c) => c.clientId === clientId
 			);
 			if (!clientSelection) {
@@ -200,6 +208,7 @@ export default function ClientMealsPage(container, store, router) {
 					clientId,
 					meals: {},
 				};
+				selection.clients = selection.clients || [];
 				selection.clients.push(clientSelection);
 			}
 
@@ -213,20 +222,29 @@ export default function ClientMealsPage(container, store, router) {
 				delete clientSelection.meals[mealId];
 			}
 
+			// Prepare the request payload
+			const payload = {
+				totalWeeks: mainDocument.totalWeeks,
+				selections: mainDocument.selections,
+			};
+			console.log("Sending update payload:", JSON.stringify(payload));
+
 			// Update the main document
 			const updateResponse = await fetch(`${API_BASE_URL}/selections`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({
-					totalWeeks: mainDocument.totalWeeks,
-					selections: mainDocument.selections,
-				}),
+				body: JSON.stringify(payload),
 			});
 
+			const responseText = await updateResponse.text();
+			console.log("Server response:", responseText);
+
 			if (!updateResponse.ok) {
-				throw new Error("Failed to update selections");
+				throw new Error(
+					`Failed to update selections: ${updateResponse.status} ${updateResponse.statusText} - ${responseText}`
+				);
 			}
 
 			// Refresh the data

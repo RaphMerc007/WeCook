@@ -172,6 +172,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 	importButton.addEventListener("click", async () => {
 		console.log("[Popup] Import button clicked");
+		console.log("[Popup] Extracted date:", extractedDate);
 		try {
 			// Generate unique IDs for meals that don't have them
 			const mealsWithIds = extractedMeals.map((meal) => ({
@@ -197,6 +198,7 @@ document.addEventListener("DOMContentLoaded", function () {
 				}, {}),
 			};
 
+			console.log("[Popup] Sending data to API with date:", extractedDate);
 			const response = await fetch(
 				"https://wecook-production.up.railway.app/api/selections",
 				{
@@ -233,8 +235,10 @@ document.addEventListener("DOMContentLoaded", function () {
 			);
 
 			if (response.ok) {
+				console.log("[Popup] Import successful with date:", extractedDate);
 				showStatus("Import successful!", "success");
 			} else {
+				console.log("[Popup] Import failed with date:", extractedDate);
 				showStatus("Import failed.", "error");
 			}
 		} catch (error) {

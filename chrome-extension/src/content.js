@@ -4,9 +4,11 @@ function extractMealData() {
 	const meals = [];
 
 	// Extract the selected week's date
+	console.log("Looking for selected week element...");
 	const selectedWeekElement = document.querySelector(
 		".border-primary.bg-primary.text-white"
 	);
+	console.log("Selected week element found:", selectedWeekElement);
 	let selectedDate = null;
 	if (selectedWeekElement) {
 		const dayElement = selectedWeekElement.querySelector(
@@ -15,12 +17,20 @@ function extractMealData() {
 		const monthElement = selectedWeekElement.querySelector(
 			".text-body-xxs:last-child"
 		);
+		console.log("Day element:", dayElement);
+		console.log("Month element:", monthElement);
 		if (dayElement && monthElement) {
 			const day = dayElement.textContent.trim();
 			const month = monthElement.textContent.trim();
 			const year = new Date().getFullYear();
+			console.log("Extracted date parts:", { day, month, year });
 			selectedDate = new Date(`${month} ${day}, ${year}`);
+			console.log("Formatted date:", selectedDate);
+		} else {
+			console.log("Could not find day or month elements");
 		}
+	} else {
+		console.log("Could not find selected week element");
 	}
 
 	// Find all meal sections

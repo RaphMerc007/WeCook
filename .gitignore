@@ -41,3 +41,6 @@ yarn-error.log*
 ehthumbs.db
 Thumbs.db 
 node_modules
+
+# Local Netlify folder
+.netlify
