@@ -102,11 +102,27 @@ export default function ClientMealsPage(container, store, router) {
 
 		isLoading = true;
 		try {
-			// Get all meals from the store
-			const allMeals = store.state.meals || [];
-			console.log("All meals from store:", allMeals);
+			// First, fetch meals available for this specific date from the main selections
+			const mealsResponse = await fetch(
+				`${API_BASE_URL}/meals?date=${selectedDate}`
+			);
+			if (!mealsResponse.ok) {
+				throw new Error(
+					`Failed to fetch meals for date: ${mealsResponse.status}`
+				);
+			}
 
-			// Fetch client-specific selections for this date
+			const availableMeals = await mealsResponse.json();
+			console.log(`Available meals for date ${selectedDate}:`, availableMeals);
+
+			if (availableMeals.length === 0) {
+				console.log("No meals available for this date");
+				weekMeals = [];
+				render();
+				return;
+			}
+
+			// Then, fetch client-specific selections for this date
 			const response = await fetch(
 				`${API_BASE_URL}/client-selections?clientId=${clientId}&date=${selectedDate}`
 			);
@@ -125,8 +141,8 @@ export default function ClientMealsPage(container, store, router) {
 				mealQuantities[selection.mealId] = selection.quantity;
 			});
 
-			// Map the meals with their quantities from the selections
-			weekMeals = allMeals.map((meal) => ({
+			// Map the available meals with their quantities from the selections
+			weekMeals = availableMeals.map((meal) => ({
 				...meal,
 				quantity: mealQuantities[meal.id] || 0,
 			}));
@@ -457,7 +473,7 @@ export default function ClientMealsPage(container, store, router) {
 						</div>
 					`
 							: selectedDate !== null
-							? "<p>No meals available for this date</p>"
+							? "<div class='notification notification-warning'><p>No meals are available for this date. Please select a different date or contact an administrator to add meals for this date.</p></div>"
 							: ""
 					}
 				</div>
