@@ -535,22 +535,23 @@ apiRouter.get("/available-dates", async (req: Request, res: Response) => {
 		// Extract and format dates to YYYY-MM-DD
 		const uniqueDates = new Set<string>();
 
+		console.log("!!!!!!!!!!!!!!!Selections:", selections);
 		selections.forEach((selection) => {
 			const dateObj = new Date(selection.date);
 			const formattedDate = dateObj.toISOString().split("T")[0]; // YYYY-MM-DD
 			uniqueDates.add(formattedDate);
 		});
 
-		// // If no dates found, return dates for the next 7 days
-		// if (uniqueDates.size === 0) {
-		// 	const today = new Date();
-		// 	for (let i = 0; i < 7; i++) {
-		// 		const date = new Date(today);
-		// 		date.setDate(today.getDate() + i);
-		// 		const formattedDate = date.toISOString().split("T")[0]; // YYYY-MM-DD
-		// 		uniqueDates.add(formattedDate);
-		// 	}
-		// }
+		// If no dates found, return dates for the next 7 days
+		if (uniqueDates.size === 0) {
+			const today = new Date();
+			for (let i = 0; i < 7; i++) {
+				const date = new Date(today);
+				date.setDate(today.getDate() + i);
+				const formattedDate = date.toISOString().split("T")[0]; // YYYY-MM-DD
+				uniqueDates.add(formattedDate);
+			}
+		}
 
 		// Convert to array and sort
 		const dateArray = Array.from(uniqueDates).sort();
