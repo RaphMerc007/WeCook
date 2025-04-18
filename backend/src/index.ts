@@ -273,7 +273,9 @@ apiRouter.post("/selections", async (req: Request, res: Response) => {
 				weekNumber: selection.weekNumber,
 				meals: cleanedMeals,
 				clientSelections,
-				...(selection.date ? { date: selection.date } : {}),
+				...(selection.date
+					? { date: new Date(selection.date).toISOString().split("T")[0] }
+					: {}),
 			};
 		});
 
