@@ -5,11 +5,35 @@ export default function ClientMealsPage(container, store, router) {
 	let weekMeals = [];
 	let isLoading = false;
 	let availableDates = [];
+	let clientData = null;
 
-	// Get client ID from store
+	// Get client ID from store (we still need this initial client ID)
 	const clientId = store.state.selectedClient;
 	console.log("ClientMealsPage initialized with clientId:", clientId);
 	console.log("Current store state:", store.state);
+
+	// Load client info from the server
+	async function loadClientInfo() {
+		try {
+			isLoading = true;
+			render();
+
+			const response = await fetch(`${API_BASE_URL}/clients/${clientId}`);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch client: ${response.status}`);
+			}
+
+			clientData = await response.json();
+			console.log("Loaded client data:", clientData);
+
+			isLoading = false;
+			render();
+		} catch (error) {
+			console.error("Error loading client data:", error);
+			isLoading = false;
+			render();
+		}
+	}
 
 	// Load data on mount
 	async function loadData() {
@@ -17,6 +41,9 @@ export default function ClientMealsPage(container, store, router) {
 			console.log("Loading data...");
 			isLoading = true;
 			render();
+
+			// Load client info first
+			await loadClientInfo();
 
 			// Fetch available dates directly from the database
 			const datesResponse = await fetch(
@@ -42,9 +69,6 @@ export default function ClientMealsPage(container, store, router) {
 			);
 			const clientSelections = await response.json();
 			console.log("Client selections for this client:", clientSelections);
-
-			// Store in state for access in render
-			store.setState({ clientSelections });
 
 			// If a date is already selected, load meals for that date
 			if (selectedDate) {
@@ -124,78 +148,53 @@ export default function ClientMealsPage(container, store, router) {
 		// Initialize with empty array
 		weekMeals = [];
 
-		// First check if we have selections for this date already in the local state
-		let foundSelections = false;
-		let clientSelections = [];
+		isLoading = true;
+		render();
 
-		// Check selections collection
-		if (store.state.selections && store.state.selections.length > 0) {
-			store.state.selections.forEach((selectionDoc) => {
-				if (selectionDoc.selections && Array.isArray(selectionDoc.selections)) {
-					selectionDoc.selections.forEach((selection) => {
-						if (selection.date) {
-							const selDate = new Date(selection.date)
-								.toISOString()
-								.split("T")[0]; // YYYY-MM-DD
-							if (selDate === normalizedSelectedDate) {
-								clientSelections.push(selection);
-								foundSelections = true;
-							}
-						}
-					});
-				}
-			});
-		}
-
-		// Also check client selections
-		if (store.state.clientSelections) {
-			Object.values(store.state.clientSelections).forEach((selection) => {
-				if (selection.date) {
-					const selDate = new Date(selection.date).toISOString().split("T")[0]; // YYYY-MM-DD
-					if (selDate === normalizedSelectedDate) {
-						clientSelections.push(selection);
-						foundSelections = true;
-					}
-				}
-			});
-		}
-
-		// Log what we found in local state
-		console.log(
-			"Found selections in local state:",
-			foundSelections,
-			clientSelections
-		);
-
-		// Try to fetch meals from API regardless of local state
+		// Try to fetch meals from API
 		try {
-			const response = await store.getters.api.get(
-				`/client-meals?date=${normalizedSelectedDate}`
+			const response = await fetch(
+				`${API_BASE_URL}/client-meals?date=${normalizedSelectedDate}`
 			);
 
+			if (!response.ok) {
+				throw new Error(`Failed to fetch meals: ${response.status}`);
+			}
+
+			const data = await response.json();
+
 			if (
-				response.data &&
-				response.data.meals &&
-				Array.isArray(response.data.meals)
+				data.success &&
+				data.data &&
+				data.data.meals &&
+				Array.isArray(data.data.meals)
 			) {
-				console.log("API returned meals:", response.data.meals);
+				console.log("API returned meals:", data.data.meals);
+
+				// Now fetch current selections to apply quantities
+				const selectionsResponse = await fetch(
+					`${API_BASE_URL}/client-selections/${clientId}?date=${normalizedSelectedDate}`
+				);
+
+				let clientSelections = [];
+				if (selectionsResponse.ok) {
+					clientSelections = await selectionsResponse.json();
+					console.log("Current selections for date:", clientSelections);
+				}
 
 				// Process API meals and apply quantities from client selections
-				weekMeals = response.data.meals.map((meal) => {
+				weekMeals = data.data.meals.map((meal) => {
 					const mealWithQuantity = { ...meal, quantity: 0 };
 
 					// Check if this meal exists in client selections and set quantity
-					if (foundSelections) {
+					if (clientSelections && clientSelections.length > 0) {
 						clientSelections.forEach((selection) => {
-							if (selection.meals && Array.isArray(selection.meals)) {
-								selection.meals.forEach((selectedMeal) => {
-									if (
-										selectedMeal.id === meal.id ||
-										selectedMeal._id === meal._id
-									) {
-										mealWithQuantity.quantity = selectedMeal.quantity || 0;
-									}
-								});
+							if (
+								selection.mealId === meal.id &&
+								new Date(selection.date).toISOString().split("T")[0] ===
+									normalizedSelectedDate
+							) {
+								mealWithQuantity.quantity = selection.quantity || 0;
 							}
 						});
 					}
@@ -214,13 +213,14 @@ export default function ClientMealsPage(container, store, router) {
 		}
 
 		console.log("Final weekMeals:", weekMeals);
+		isLoading = false;
+		render();
 	}
 
 	const handleQuantityChange = async (mealId, date, change) => {
 		try {
-			const client = store.state.clients.find((c) => c.id === clientId);
-			if (!client) {
-				console.error("Client not found");
+			if (!clientData) {
+				console.error("Client data not available");
 				return;
 			}
 
@@ -524,18 +524,18 @@ export default function ClientMealsPage(container, store, router) {
 			})),
 		};
 
-		// Store in local state first
-		if (!store.state.clientSelections) {
-			store.state.clientSelections = {};
-		}
-		store.state.clientSelections[normalizedDate] = selection;
-
 		// Send to API
 		try {
-			await store.getters.api.post("/client-selections", {
-				clientId: store.state.user.id,
-				date: normalizedDate,
-				selections: selection,
+			await fetch(`${API_BASE_URL}/client-selections`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					clientId,
+					date: normalizedDate,
+					selections: selection,
+				}),
 			});
 
 			showNotification("Selections saved successfully!", "success");
@@ -552,19 +552,24 @@ export default function ClientMealsPage(container, store, router) {
 			isLoading,
 			clientId,
 			availableDates,
+			clientData,
 		});
 
-		console.log("Store state:", store.state);
-
-		const client = store.state.clients.find((c) => c.id === clientId);
-		console.log("Found client in render:", client);
-
-		if (!client) {
-			console.error("Client not found in render!");
+		if (!clientData && !isLoading) {
 			container.innerHTML = `
 				<div class="container">
-					<p>Client not found</p>
-					<button class="button" onclick="window.navigateToClients()">Back to Clients</button>
+					<p>Loading client data...</p>
+				</div>
+			`;
+			// Load client info if not already loading
+			loadClientInfo();
+			return;
+		}
+
+		if (!clientData) {
+			container.innerHTML = `
+				<div class="container">
+					<p>Loading client information...</p>
 				</div>
 			`;
 			return;
@@ -594,7 +599,7 @@ export default function ClientMealsPage(container, store, router) {
 				<div class="stack">
 					<div class="group">
 						<div>
-							<h2>${client.name}'s Meals</h2>
+							<h2>${clientData.name}'s Meals</h2>
 						</div>
 						<div class="group">
 							<select class="input" onchange="window.handleDateSelect(event)" ${
@@ -720,7 +725,7 @@ export default function ClientMealsPage(container, store, router) {
 				</div>
 			</div>
 			<div style="position: fixed; bottom: 20px; right: 20px; background-color: var(--primary-color); color: white; padding: 12px 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-weight: 500;">
-				Selected: ${selectedCount}/${client.mealsPerWeek}
+				Selected: ${selectedCount}/${clientData.mealsPerWeek || 0}
 			</div>
 		`;
 

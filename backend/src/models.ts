@@ -1,47 +1,60 @@
 import mongoose from "mongoose";
-import { UserSelections } from "./types.js";
 
-const WeekSelectionSchema = new mongoose.Schema({
-	weekNumber: { type: Number, required: true },
-	meals: { type: Object, required: true },
-	date: { type: Date, required: false },
-});
-
+// Selections Schema
 const SelectionsSchema = new mongoose.Schema({
 	totalWeeks: { type: Number, required: true },
-	currentWeek: { type: Number, required: true },
-	selections: [WeekSelectionSchema],
+	currentWeek: { type: Number, default: 0 },
+	selections: [
+		{
+			weekNumber: Number,
+			meals: { type: Object, default: {} },
+			date: Date,
+			clientSelections: { type: Object, default: {} },
+		},
+	],
 });
 
+// Meal Schema
 const MealSchema = new mongoose.Schema({
 	id: { type: String, required: true, unique: true },
 	name: { type: String, required: true },
-	imageUrl: { type: String, required: true },
-	category: { type: String, required: true },
-	price: { type: mongoose.Schema.Types.Mixed, required: true },
-	hasSideDish: { type: Boolean, required: true },
-	sideDishes: { type: [String], required: true },
+	imageUrl: String,
+	category: String,
+	price: mongoose.Schema.Types.Mixed,
+	hasSideDish: Boolean,
+	sideDishes: [String],
 });
 
-// New schema for client meal selections
+// Client Meal Selection Schema
 const ClientMealSelectionSchema = new mongoose.Schema({
 	clientId: { type: String, required: true },
 	date: { type: Date, required: true },
 	mealId: { type: String, required: true },
-	quantity: { type: Number, required: true, default: 0 },
-	// Add a created/updated timestamp
-	createdAt: { type: Date, default: Date.now },
+	quantity: { type: Number, default: 0 },
 });
 
-// Add a compound index to ensure uniqueness of clientId + date + mealId
+// Create a compound index for uniqueness
 ClientMealSelectionSchema.index(
 	{ clientId: 1, date: 1, mealId: 1 },
 	{ unique: true }
 );
 
+// Client Schema
+const ClientSchema = new mongoose.Schema({
+	id: { type: String, required: true, unique: true },
+	name: { type: String, required: true },
+	mealsPerWeek: { type: Number, default: 5 },
+	email: { type: String },
+	phone: { type: String },
+	createdAt: { type: Date, default: Date.now },
+	updatedAt: { type: Date, default: Date.now },
+});
+
+// Create models
 export const SelectionsModel = mongoose.model("Selections", SelectionsSchema);
 export const MealModel = mongoose.model("Meal", MealSchema);
 export const ClientMealSelectionModel = mongoose.model(
 	"ClientMealSelection",
 	ClientMealSelectionSchema
 );
+export const ClientModel = mongoose.model("Client", ClientSchema);

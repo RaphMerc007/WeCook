@@ -1,35 +1,52 @@
-// State management
+// Store implementation
 const store = {
 	state: {
-		meals: [],
-		clients: [],
 		selectedClient: null,
+		user: null,
 	},
-	listeners: new Set(),
+	listeners: [],
 
 	subscribe(listener) {
-		this.listeners.add(listener);
-		return () => this.listeners.delete(listener);
+		this.listeners.push(listener);
+		return () => {
+			this.listeners = this.listeners.filter((l) => l !== listener);
+		};
 	},
 
 	setState(newState) {
 		this.state = { ...this.state, ...newState };
-		// Persist state to localStorage
-		localStorage.setItem("wecook-state", JSON.stringify(this.state));
 		this.listeners.forEach((listener) => listener(this.state));
 	},
 
-	// Load state from localStorage
-	loadState() {
-		const savedState = localStorage.getItem("wecook-state");
-		if (savedState) {
-			this.state = JSON.parse(savedState);
-		}
+	getState() {
+		return this.state;
+	},
+
+	getters: {
+		api: {
+			get: async (url) => {
+				const response = await fetch(`${API_BASE_URL}${url}`);
+				if (!response.ok) {
+					throw new Error(`API error: ${response.status}`);
+				}
+				return response.json();
+			},
+			post: async (url, data) => {
+				const response = await fetch(`${API_BASE_URL}${url}`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(data),
+				});
+				if (!response.ok) {
+					throw new Error(`API error: ${response.status}`);
+				}
+				return response.json();
+			},
+		},
 	},
 };
-
-// Load saved state on startup
-store.loadState();
 
 // Router
 const router = {

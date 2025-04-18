@@ -478,146 +478,61 @@ document.addEventListener("DOMContentLoaded", function () {
 
 	// Function to send meals to web app
 	async function sendMealsToWebApp(meals) {
-		console.log("[Popup] Starting to send meals to web app using localStorage");
-		console.log("[Popup] Meals to send:", meals);
-		console.log("[Popup] Meals count:", meals.length);
-
 		try {
-			// Get the web app tab
-			const [tab] = await chrome.tabs.query({ url: "http://localhost:3000/*" });
-			if (!tab) {
-				console.error("[Popup] Web app tab not found");
-				throw new Error("Web app tab not found");
-			}
+			console.log("[Popup] Starting to send meals to web app via API");
 
-			console.log("[Popup] Found web app tab:", tab.id, tab.url);
+			// Format meals data
+			const mealsData = meals.map((meal) => ({
+				id: meal.id || generateMealId(meal.name),
+				name: meal.name,
+				imageUrl: meal.imageUrl,
+				category: meal.category || "Regular",
+				price: meal.price || 0,
+				hasSideDish: meal.hasSideDish || false,
+				sideDishes: meal.sideDishes || [],
+			}));
 
-			// Convert meals to a JSON string
-			const mealsJSON = JSON.stringify(meals);
-			console.log("[Popup] JSON string created, length:", mealsJSON.length);
-			console.log(
-				"[Popup] First 100 chars of JSON:",
-				mealsJSON.substring(0, 100)
+			// Send meals directly to the API
+			const response = await fetch(
+				"https://wecook-production.up.railway.app/api/meals",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						meals: mealsData,
+						date: new Date().toISOString(),
+					}),
+				}
 			);
 
-			// Inject a script to store the meals in localStorage
-			const result = await chrome.scripting.executeScript({
-				target: { tabId: tab.id },
-				func: (mealsJSON) => {
-					try {
-						console.log("[WebApp Direct] Storing meals in localStorage");
-						console.log("[WebApp Direct] JSON length:", mealsJSON.length);
-
-						// First check if localStorage is available
-						if (typeof localStorage === "undefined") {
-							console.error("[WebApp Direct] localStorage is not available");
-							return { success: false, error: "localStorage is not available" };
-						}
-
-						// Test storing a simple value first
-						try {
-							localStorage.setItem("wecookTest", "test");
-							console.log("[WebApp Direct] Test value stored successfully");
-						} catch (e) {
-							console.error("[WebApp Direct] Error storing test value:", e);
-							return {
-								success: false,
-								error: "Failed to store test value: " + e.toString(),
-							};
-						}
-
-						// Store the actual data
-						try {
-							localStorage.setItem("wecookMeals", mealsJSON);
-							console.log("[WebApp Direct] Meals stored successfully");
-						} catch (e) {
-							console.error("[WebApp Direct] Error storing meals:", e);
-							return {
-								success: false,
-								error: "Failed to store meals: " + e.toString(),
-							};
-						}
-
-						// Store the timestamp
-						try {
-							const timestamp = new Date().toISOString();
-							localStorage.setItem("wecookMealsTimestamp", timestamp);
-							console.log("[WebApp Direct] Timestamp stored:", timestamp);
-						} catch (e) {
-							console.error("[WebApp Direct] Error storing timestamp:", e);
-							return {
-								success: false,
-								error: "Failed to store timestamp: " + e.toString(),
-							};
-						}
-
-						// Try to notify the app with a simple event
-						try {
-							window.postMessage(
-								{
-									type: "WECOOK_STORAGE_UPDATED",
-									timestamp: new Date().toISOString(),
-								},
-								"*"
-							);
-							console.log("[WebApp Direct] Notification message sent");
-						} catch (e) {
-							console.error("[WebApp Direct] Error sending notification:", e);
-							// Don't fail just because notification failed
-						}
-
-						console.log(
-							"[WebApp Direct] All data stored in localStorage successfully"
-						);
-
-						// Verify the data was stored
-						const storedData = localStorage.getItem("wecookMeals");
-						console.log(
-							"[WebApp Direct] Verified data length:",
-							storedData ? storedData.length : 0
-						);
-
-						return {
-							success: true,
-							dataLength: mealsJSON.length,
-							storedLength: storedData ? storedData.length : 0,
-						};
-					} catch (error) {
-						console.error(
-							"[WebApp Direct] Error storing in localStorage:",
-							error
-						);
-						return { success: false, error: error.toString() };
-					}
-				},
-				args: [mealsJSON],
-				world: "MAIN",
-			});
-
-			console.log("[Popup] localStorage injection result:", result);
-
-			if (result && result[0] && result[0].result && result[0].result.success) {
-				console.log("[Popup] Meals saved to localStorage successfully");
-				console.log(
-					"[Popup] Data lengths - original:",
-					mealsJSON.length,
-					"stored:",
-					result[0].result.storedLength
-				);
-				showStatus(
-					"Meals sent to web app successfully! Check localStorage.",
-					"success"
-				);
-			} else {
-				const error =
-					result && result[0] && result[0].result
-						? result[0].result.error
-						: "Unknown error";
-				throw new Error(`Failed to store meals in localStorage: ${error}`);
+			if (!response.ok) {
+				throw new Error(`API error: ${response.status}`);
 			}
+
+			const result = await response.json();
+			console.log("[Popup] API response:", result);
+
+			// Show success message
+			showMessage(
+				"success",
+				"Meals sent to web app successfully! Check the web app.",
+				5000
+			);
+
+			return { success: true };
 		} catch (error) {
-			console.error("[Popup] Error in sendMealsToWebApp:", error);
-			showStatus("Error: " + error.message, "error");
+			console.error("[Popup] Error sending meals to web app:", error);
+			showMessage("error", `Failed to send meals: ${error.message}`, 5000);
+			throw new Error(`Failed to send meals to web app: ${error}`);
 		}
+	}
+
+	function generateMealId(name) {
+		// Create ID based on name with hyphens and a random string
+		const nameSlug = name.toLowerCase().replace(/\s+/g, "-");
+		const randomId = Math.random().toString(36).substring(7);
+		return `${nameSlug}-${randomId}`;
 	}
 });

@@ -6,6 +6,7 @@ import {
 	SelectionsModel,
 	MealModel,
 	ClientMealSelectionModel,
+	ClientModel,
 } from "./models.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -561,6 +562,38 @@ apiRouter.get("/available-dates", async (req: Request, res: Response) => {
 	} catch (error) {
 		console.error("Error fetching available dates:", error);
 		res.status(500).json({ error: "Failed to fetch available dates" });
+	}
+});
+
+// Get client details by ID
+apiRouter.get("/clients/:clientId", async (req: Request, res: Response) => {
+	try {
+		console.log("Fetching client details for:", req.params.clientId);
+		const clientId = req.params.clientId;
+
+		// Try to find the client
+		let client = await ClientModel.findOne({ id: clientId });
+
+		// If client doesn't exist, create a new one
+		if (!client) {
+			console.log("Client not found, creating new client");
+			try {
+				client = await ClientModel.create({
+					id: clientId,
+					name: `Client ${clientId}`,
+					mealsPerWeek: 5,
+				});
+				console.log("Successfully created new client:", client);
+			} catch (createError) {
+				console.error("Error creating client:", createError);
+				return res.status(500).json({ error: "Failed to create client" });
+			}
+		}
+
+		res.json(client);
+	} catch (error) {
+		console.error("Error fetching client details:", error);
+		res.status(500).json({ error: "Failed to fetch client details" });
 	}
 });
 
